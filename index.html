@@ -532,6 +532,37 @@ window.addEventListener('load', () => {
 })();
 </script>
 <!-- ==== /Investor Lens ==== -->
+  <script>
+/* ซ่อน/ลบแมปและแผงขวาเดิม เมื่ออยู่ในโหมดเลนส์นักลงทุน */
+(function () {
+  function hideOldBlocks(mode='hide') {
+    // รายชื่อกล่องเก่าๆ ที่มักเจอในโปรเจกต์นี้
+    const selectors = [
+      '#map',               // แผนที่เก่า (Leaflet เดิม)
+      '#infoPanel',         // แผงรายละเอียดฝั่งขวา
+      '.right-panel', '.details', '.sidebar',
+      '.opportunity', '.kpi-panel', '.summary'
+    ];
+    selectors.forEach(sel => {
+      document.querySelectorAll(sel).forEach(el => {
+        if (mode === 'remove') el.remove();
+        else el.style.display = 'none';
+      });
+    });
+  }
+
+  // 1) ถ้าเปิดด้วย ?lens=investor ให้ซ่อนของเก่าทันที
+  const p = new URLSearchParams(location.search);
+  if ((p.get('lens') || '').toLowerCase() === 'investor') {
+    hideOldBlocks('hide');  // ถ้าต้องการลบทิ้งจริง ๆ เปลี่ยนเป็น 'remove'
+  }
+
+  // 2) ถ้าคลิกปุ่ม/ลิงก์ "นักลงทุน" บนเมนู ให้ซ่อนของเก่าทันทีหลังคลิก
+  [...document.querySelectorAll('a,button')]
+    .filter(el => /นักลงทุน/.test((el.textContent || '').trim()))
+    .forEach(el => el.addEventListener('click', () => setTimeout(() => hideOldBlocks('hide'), 0)));
+})();
+</script>
     
 </body>
 </html>
