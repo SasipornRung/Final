@@ -22,14 +22,27 @@
     @media (max-width:980px){.row{grid-template-columns:1fr}}
 
     /* Map */
-    #map{height:66vh;min-height:420px;background:#fff;border:1px solid var(--line);border-radius:12px;position:relative;overflow:hidden}
+    #map{height:66vh;min-height:420px;background:#fff;border:1px solid var(--line);border-radius:12px;position:relative;overflow:hidden;z-index:10}
+    .leaflet-container{cursor:grab;touch-action:pan-x pan-y}
+    .leaflet-container:active{cursor:grabbing}
     .searchCtl{position:absolute;z-index:800;left:10px;top:10px;background:#fff;border:1px solid var(--line);
-      border-radius:999px;padding:6px;display:flex;gap:6px;align-items:center;box-shadow:0 6px 14px rgba(0,0,0,.08)}
+      border-radius:999px;padding:6px;display:flex;gap:6px;align-items:center;box-shadow:0 6px 14px rgba(0,0,0,.08);pointer-events:auto}
     .searchCtl input{border:0;outline:none;padding:6px 8px;width:240px;border-radius:999px;font-weight:700;color:var(--green-700)}
     .btn{background:var(--green);color:#fff;border:0;border-radius:999px;padding:8px 12px;font-weight:800;cursor:pointer}
 
+    /* ปล่อยคลิกทะลุ Canvas ของ Heat */
+    .leaflet-heatmap-layer,
+    .leaflet-overlay-pane canvas { pointer-events: none; }
+
+    /* Marker/ปุ่มย่านบนแผนที่ */
+    .area-dot span{
+      background:#fff;border:1px solid #E6EEEC;border-radius:999px;
+      padding:4px 8px;font-weight:800;color:#0E3F38;white-space:nowrap;
+      box-shadow:0 2px 8px rgba(0,0,0,.10)
+    }
+
     /* Right panel */
-    .panel{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;min-height:66vh}
+    .panel{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;min-height:66vh;position:relative;z-index:1}
     .kpis{display:flex;gap:8px;margin:0 0 10px}
     .kpi{flex:1;border:1px solid var(--line);border-radius:12px;padding:10px}
     .kpi small{color:var(--muted)} .kpi b{color:var(--green-700);font-size:20px}
@@ -187,14 +200,42 @@
               : v.startsWith('tho')?'thonglor'
               : v.includes('rama') || v.includes('พระราม') ? 'rama9'
               : 'sukhumvit';
-        const a=INV[active];
-        map.setView(a.center, 14);
-        heatLayer.setLatLngs(a.heat);
-        setKPI();
+        selectArea(active);
       };
 
       goBtn.addEventListener('click', apply);
       input.addEventListener('keydown', (e)=>{ if (e.key==='Enter') apply(); });
+    }
+
+    /* =========================
+       เลือกย่านจากคลิก/ปุ่มบนแผนที่
+    ==========================*/
+    const LABEL = { sukhumvit:'Sukhumvit', ekkamai:'Ekkamai', thonglor:'Thonglor', rama9:'Rama 9' };
+
+    function selectArea(key){
+      if (!INV[key]) return;
+      active = key;
+      const a = INV[active];
+      map.setView(a.center, 14);
+      heatLayer.setLatLngs(a.heat);
+      setKPI();
+    }
+
+    function nearestArea(latlng){
+      let best=null, dist=Infinity;
+      for (const [k,v] of Object.entries(INV)){
+        const d = map.distance(latlng, L.latLng(v.center));
+        if (d < dist){ dist=d; best=k; }
+      }
+      return {key:best, dist};
+    }
+
+    function addAreaMarkers(){
+      for (const [k,v] of Object.entries(INV)){
+        L.marker(v.center, {
+          icon: L.divIcon({ className:'area-dot', html:`<span>${LABEL[k]||k}</span>` })
+        }).addTo(map).on('click', ()=>selectArea(k));
+      }
     }
 
     /* =========================
@@ -218,6 +259,14 @@
       map = L.map('map',{zoomControl:true});
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
 
+      // เปิด gesture ทั้งหมด
+      map.dragging.enable();
+      map.scrollWheelZoom.enable();
+      map.touchZoom.enable();
+      map.doubleClickZoom.enable();
+      map.boxZoom.enable();
+      map.keyboard.enable();
+
       map.setView(INV[active].center, 14);
 
       heatLayer = L.heatLayer(INV[active].heat, {
@@ -227,14 +276,25 @@
 
       sMap.className='pill ok';
 
+      // ใส่ปุ่มย่านและคลิกเลือกย่านบนแผนที่
+      addAreaMarkers();
+      map.on('click', (e)=>{
+        const {key, dist} = nearestArea(e.latlng);
+        if (key && dist < 1500) selectArea(key);   // 1.5 กม.
+      });
+
+      // ไม่ให้กล่องค้นหาขวางการลาก/ซูม
       ensureSearchCtl();
+      const ctl = document.querySelector('.searchCtl');
+      if (ctl){ L.DomEvent.disableClickPropagation(ctl); L.DomEvent.disableScrollPropagation(ctl); }
+
       setKPI();
     }
 
     /* =========================
        SLIDES (ปัด/คลิกดอท)
     ==========================*/
-      function initSlides(){
+    function initSlides(){
       const track=document.getElementById('track');
       const dots=[...document.querySelectorAll('.dot')];
       let cur=1;
