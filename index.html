@@ -1,480 +1,187 @@
 <!doctype html>
 <html lang="th">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PropDecoded • Safe Mode</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Investor Lens • Clean Start</title>
 
-<!-- Leaflet -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Heatmap for Leaflet -->
+  <script defer src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 
-<!-- Chart.js -->
-<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    :root{
+      --green:#1F6F63; --green-700:#0E3F38; --muted:#6A7D80; --line:#E6EEEC; --bg:#F6FAF9;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial;background:var(--bg);color:#142a2a}
+    header{padding:14px 16px;display:flex;align-items:center;gap:10px}
+    .badge{background:#E9F6F0;color:var(--green-700);font-weight:800;padding:6px 10px;border-radius:8px}
+    h1{font-size:18px;margin:0}
 
-<style>
-  :root{
-    --green:#2E7D5B; --green-100:#E9F6F0; --green-300:#BFE3D2;
-    --teal:#1F6F63; --yellow:#F5E29E; --ink:#12333A; --muted:#4B5B5F;
-    --card:#ffffff; --border:#E5EFE9; --shadow:0 8px 24px rgba(0,0,0,.08);
-  }
-  *{box-sizing:border-box} html,body{height:100%}
-  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Thai","Prompt",Arial,sans-serif;background:linear-gradient(180deg,var(--green-100),#F7FAF9);color:var(--ink)}
-  .container{max-width:1120px;margin:0 auto;padding:16px 20px 80px}
-  .header{display:flex;align-items:center;gap:12px;padding:6px 0 10px;font-weight:800}
-  .logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--green),var(--teal));display:grid;place-items:center;color:#fff;box-shadow:var(--shadow)}
-  h1{margin:8px 0 12px}
+    /* layout */
+    .wrap{padding:0 16px 16px}
+    .row{display:grid;grid-template-columns:1.35fr .9fr;gap:12px}
+    @media(max-width:980px){.row{grid-template-columns:1fr}}
 
-  .quick-grid{display:grid;gap:14px;grid-template-columns:1fr 1fr}
-  @media(min-width:900px){.quick-grid{grid-template-columns:repeat(4,1fr)}}
-  .qcard{background:#fff;border-radius:16px;box-shadow:var(--shadow);padding:18px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;border:none}
-  .qicon{width:36px;height:36px;border-radius:10px;background:var(--green-300);display:grid;place-items:center;font-weight:900;color:#1F6F63}
-  .hint{color:#6A7D80;font-size:13px;margin-top:2px}
+    /* map */
+    #map{height:66vh;min-height:420px;background:#fff;border:1px solid var(--line);border-radius:12px;position:relative;overflow:hidden}
+    .searchCtl{position:absolute;z-index:800;left:10px;top:10px;background:#fff;border:1px solid var(--line);
+      border-radius:999px;padding:6px;display:flex;gap:6px;align-items:center;box-shadow:0 6px 14px rgba(0,0,0,.08)}
+    .searchCtl input{border:0;outline:none;padding:6px 8px;width:220px;border-radius:999px;font-weight:700;color:var(--green-700)}
+    .btn{background:var(--green);color:#fff;border:0;border-radius:999px;padding:8px 12px;font-weight:800;cursor:pointer}
 
-  .lens-bar{margin:18px 0 12px;display:flex;gap:8px;flex-wrap:wrap;position:relative;z-index:5}
-  .seg{border:2px solid var(--green);border-radius:999px;padding:4px;display:inline-flex;gap:6px;background:#fff;box-shadow:var(--shadow)}
-  .seg button{all:unset;padding:8px 14px;border-radius:999px;color:var(--green);font-weight:700;cursor:pointer}
-  .seg button.active{background:linear-gradient(180deg,#D6EFE3,#fff);color:var(--ink);box-shadow:inset 0 0 0 2px rgba(255,255,255,.6)}
+    /* right panel (investor) */
+    .panel{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;min-height:66vh}
+    .kpis{display:flex;gap:8px;margin:0 0 10px}
+    .kpi{flex:1;border:1px solid var(--line);border-radius:12px;padding:10px}
+    .kpi small{color:var(--muted)}
+    .kpi b{color:var(--green-700);font-size:20px}
 
-  .main{display:grid;grid-template-columns:1.2fr .8fr;gap:16px;align-items:start}
-  @media(max-width:920px){.main{grid-template-columns:1fr}}
-
-  #map{height:56vh;min-height:320px;border-radius:16px;box-shadow:var(--shadow)}
-  .insight{background:#fff;border-radius:16px;box-shadow:var(--shadow);padding:16px 16px 10px}
-  .badge{display:inline-block;background:#BFE3D2;color:#1F6F63;padding:6px 10px;border-radius:999px;font-weight:700;font-size:13px;margin-right:6px}
-  .meter{height:10px;background:#ECF2F3;border-radius:999px;overflow:hidden}
-  .meter>span{display:block;height:100%;background:linear-gradient(90deg,#CFEBDD,var(--yellow));width:40%}
-  .kpi{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
-  .kpi .card{background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:12px}
-  .muted{color:var(--muted)} details{background:#FAFCFB;border:1.5px solid var(--border);border-radius:12px;padding:10px 12px;margin:6px 0}
-
-  /* Renovator dashboard (light) */
-  #renovatorDash{display:none;height:56vh;min-height:320px}
-  .reno-wrap{height:100%;background:#fff;color:var(--ink);border-radius:16px;box-shadow:var(--shadow);padding:16px;overflow:auto}
-  .reno-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  @media(max-width:900px){.reno-grid{grid-template-columns:1fr}}
-  .reno-card{background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:14px}
-  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:6px 0 10px}
-  .kpiD{background:#fff;border:1.5px solid var(--border);border-radius:12px;padding:10px}
-  .kpiD .lab{font-size:12px;color:#4B5B5F}
-  .kpiD .val{font-size:22px;margin-top:2px;color:var(--ink)}
-  .pos{color:#2E7D5B}.neg{color:#d44a54}
-  .canvas{height:260px}
-  .badge-green{display:inline-block;background:#BFE3D2;color:#1F6F63;padding:6px 10px;border-radius:999px;font-weight:800;font-size:12px;margin:8px 0}
-  .range-wrap{font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans Thai';margin:8px 0}
-  .range-title{margin-bottom:6px;color:#12333A;font-weight:700}
-  .range-bar{position:relative;height:28px;border-radius:14px;overflow:hidden;background:linear-gradient(90deg,#2E7D5B 0%, #F5E29E 50%, #d44a54 100%);box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
-  .range-frame{position:absolute;inset:0;border:2px solid #fff;border-radius:14px;pointer-events:none}
-  .range-marker{position:absolute;top:50%;transform:translate(-50%,-50%);width:12px;height:12px;border-radius:50%;background:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.15)}
-  .range-tag{position:absolute;transform:translate(-50%,8px);background:#eef2ff;color:#1e40af;font-size:12px;padding:3px 8px;border-radius:999px;white-space:nowrap}
-  .range-labels{display:flex;justify-content:space-between;color:#4B5B5F;font-size:12px;margin-top:4px}
-  .range-note{font-size:12px;color:#4B5B5F;margin-top:4px}
-
-  /* กัน overlay มาทับเลนส์ */
-  .lens-bar, .seg, .seg button { pointer-events:auto }
-</style>
+    .frame{position:relative;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+    .track{display:flex;transition:transform .35s ease;will-change:transform}
+    .slide{min-width:100%;padding:12px}
+    .slide h3{margin:0 0 8px;font-size:16px}
+    .facts{margin:6px 0 0 18px;line-height:1.6}
+    .dots{display:flex;justify-content:center;gap:8px;margin-top:8px}
+    .dot{width:22px;height:6px;border-radius:999px;background:#E0E7E4;border:0;cursor:pointer}
+    .dot[aria-selected="true"]{background:var(--green)}
+  </style>
 </head>
 <body>
-  <div class="container">
-    <header class="header"><div class="logo">PD</div> PropDecoded</header>
-    <h1>ยินดีต้อนรับ</h1>
+  <header>
+    <div class="badge">PD</div>
+    <h1>Investor Lens • Clean Start</h1>
+  </header>
 
-    <section class="quick-grid" aria-label="เมนูด่วน">
-      <button class="qcard"><div class="qicon">➤</div><div><div class="qtitle">เริ่มต้นใช้งาน</div><div class="hint">เลือกเลนส์แล้วเริ่มสำรวจ</div></div></button>
-      <button class="qcard"><div class="qicon">⌁</div><div><div class="qtitle">บทวิเคราะห์</div><div class="hint">อ่าน insight ที่คัดสรร</div></div></button>
-      <button class="qcard"><div class="qicon">§</div><div><div class="qtitle">ข้อกฎหมายที่ควรทราบ</div><div class="hint">ข้อมูลกลางเพื่อประกอบความเข้าใจ</div></div></button>
-      <button class="qcard"><div class="qicon">☎</div><div><div class="qtitle">ติดต่อเรา</div><div class="hint">อีเมลถึงทีมงาน</div></div></button>
-    </section>
+  <div class="wrap">
+    <div class="row">
+      <section>
+        <div id="map"></div>
+      </section>
 
-    <section class="lens-bar">
-      <div class="seg" role="tablist" aria-label="มุมมองข้อมูล">
-        <button class="active" id="lens-tenant" role="tab" aria-selected="true">ผู้เช่า</button>
-        <button id="lens-investor" role="tab" aria-selected="false">นักลงทุน</button>
-        <button id="lens-renovator" role="tab" aria-selected="false">รีโนเวท/ดีเวลอป</button>
-      </div>
-    </section>
+      <aside id="right" class="panel">
+        <div class="kpis">
+          <div class="kpi"><small>Yield (ย่าน)</small><b id="kpiYield">—</b></div>
+          <div class="kpi"><small>Cap Rate (ย่าน)</small><b id="kpiCap">—</b></div>
+        </div>
 
-    <section class="main">
-      <div>
-        <div id="map" aria-label="แผนที่"></div>
-
-        <div id="renovatorDash">
-          <div class="reno-wrap">
-            <h2 class="reno-title">Investor Portfolio</h2>
-            <div class="kpis">
-              <div class="kpiD"><div class="lab">จำนวนนักลงทุน</div><div id="kpiI" class="val">–</div></div>
-              <div class="kpiD"><div class="lab">จำนวนห้องชุดทั้งหมด</div><div id="kpiU" class="val">–</div></div>
-              <div class="kpiD"><div class="lab">กำไร/ขาดทุนรวม</div><div id="kpiN" class="val">–</div></div>
-            </div>
-            <div class="reno-grid">
-              <div class="reno-card">
-                <h4 style="margin:0 0 8px">สัดส่วนจำนวนห้องราย (Donut)</h4>
-                <div class="canvas"><canvas id="donut"></canvas></div>
-                <span class="badge-green">Developer Benchmarks</span>
-                <div id="benchMarket"></div>
-                <div id="benchOwner"></div>
-              </div>
-              <div class="reno-card">
-                <h4 style="margin:0 0 8px">กำไร/ขาดทุนสุทธิต่อราย (Bar)</h4>
-                <div class="canvas"><canvas id="barV"></canvas></div>
-                <div class="muted" style="margin-top:6px">แท่งเขียว = กำไร • แท่งแดง = ขาดทุน</div>
-              </div>
-            </div>
+        <div class="frame">
+          <div class="track" id="track">
+            <section class="slide">
+              <h3>วิธีอ่าน Heat Map</h3>
+              <ul class="facts">
+                <li>สีเข้ม = ความหนาแน่นกิจกรรมตลาดสูง (ธุรกรรม/ความสนใจ/สต็อกหมุนเวียน)</li>
+                <li>สีอ่อน = ความหนาแน่นต่ำ</li>
+                <li>ค้นหาย่านเพื่อซูมไปยังบริเวณนั้น</li>
+              </ul>
+            </section>
+            <section class="slide">
+              <h3>Demand & Liquidity (นิยามย่อ)</h3>
+              <ul class="facts">
+                <li><b>Take-up Rate</b> % การขายช่วงเปิดตัว (สูง = ขายไว)</li>
+                <li><b>Absorption</b> ยูนิตขายออกในช่วงเวลา</li>
+                <li><b>Overhang</b> ยูนิตคงค้างสะสม (ต่ำ = ระบายได้ดี)</li>
+              </ul>
+            </section>
+            <section class="slide">
+              <h3>Supply & Rental</h3>
+              <ul class="facts">
+                <li><b>New Projects</b> สะท้อนเม็ดเงินลงทุน/ความมั่นใจ</li>
+                <li><b>Yield vs Cap Rate</b> เทียบผลตอบแทนขั้นต้น/หลังค่าใช้จ่าย</li>
+              </ul>
+            </section>
+            <section class="slide">
+              <h3>Price Metrics (10 ปี)</h3>
+              <ul class="facts">
+                <li><b>Launch</b> ราคาเปิดตัวโครงการใหม่</li>
+                <li><b>Resale</b> ราคาซื้อขายมือสอง</li>
+                <li><b>Treasury</b> ราคาประเมินใช้เป็น baseline</li>
+              </ul>
+            </section>
           </div>
         </div>
-      </div>
-
-      <aside class="insight">
-        <span class="badge" id="lensTag">ผู้เช่า</span>
-        <h3 id="areaTitle">วัฒนา</h3>
-        <div class="muted" id="subtitle">ภาพรวมสำหรับผู้อาศัย</div>
-        <div style="margin:12px 0 6px;font-weight:800">ตัวชี้วัดหลัก</div>
-        <div class="meter"><span id="meterFill" style="width:60%"></span></div>
-        <div class="kpi">
-          <div class="card"><h4>ข้อมูลย่อ</h4><div class="muted" id="kpiLeftDesc">CBD ~ 18 นาที • BTS ~ 6 นาที</div></div>
-          <div class="card"><h4 id="kpiRightTitle">รีวิวล่าสุด</h4><div class="muted" id="kpiRightDesc">“ย่านเงียบช่วงกลางคืน มีร้านสะดวกซื้อใกล้ ๆ”</div></div>
+        <div class="dots" role="tablist" aria-label="Investor pages">
+          <button class="dot" data-go="1" aria-selected="true"></button>
+          <button class="dot" data-go="2"></button>
+          <button class="dot" data-go="3"></button>
+          <button class="dot" data-go="4"></button>
         </div>
-        <details open><summary>รายละเอียด</summary>
-          <p class="muted" id="detailsText">• ตัวอย่างข้อความรายละเอียดจากไฟล์ JSON</p>
-        </details>
       </aside>
-    </section>
+    </div>
   </div>
 
-<script>
-'use strict';
-
-window.addEventListener('load', () => {
-  const log = (...a)=>console.log('[PD]',...a);
-  const showError = (msg)=>{ console.error(msg); alert('Error: '+msg); };
-
-  // Elements
-  const mapEl = document.getElementById('map');
-  const renoEl = document.getElementById('renovatorDash');
-  const lensBtns = {
-    tenant: document.getElementById('lens-tenant'),
-    investor: document.getElementById('lens-investor'),
-    renovator: document.getElementById('lens-renovator'),
+  <script>
+  // --- demo data (แทนด้วย JSON จริงได้ภายหลัง) ---
+  const INV = {
+    sukhumvit:{ center:[13.7336,100.5760],
+      heat:[[13.732,100.572,0.9],[13.735,100.581,0.8],[13.728,100.583,0.7],[13.739,100.575,0.65]],
+      kpi:{yield:5.6,cap:4.2}
+    },
+    ekkamai:{ center:[13.727,100.587], heat:[[13.726,100.585,0.8],[13.729,100.589,0.7]], kpi:{yield:5.2,cap:3.9}},
+    thonglor:{ center:[13.731,100.582], heat:[[13.732,100.583,0.75],[13.729,100.580,0.6]], kpi:{yield:5.4,cap:4.0}}
   };
+  let invActive = 'sukhumvit';
+  let map, heat;
 
-  // Right pane refs
-  const lensTag=document.getElementById('lensTag'), subtitle=document.getElementById('subtitle'),
-        meterFill=document.getElementById('meterFill'),
-        kpiLeftDesc=document.getElementById('kpiLeftDesc'),
-        kpiRightTitle=document.getElementById('kpiRightTitle'),
-        kpiRightDesc=document.getElementById('kpiRightDesc'),
-        detailsText=document.getElementById('detailsText');
+  function setKPI(){
+    const a = INV[invActive] || INV.sukhumvit;
+    document.getElementById('kpiYield').textContent = a.kpi.yield + '%';
+    document.getElementById('kpiCap').textContent   = a.kpi.cap   + '%';
+  }
 
-  const fmt = n => Number(n).toLocaleString('th-TH');
-  const soft = i => `hsl(${(i*137.508)%360} 70% 55%)`;
+  function ensureSearchCtl(){
+    if (document.querySelector('.searchCtl')) return;
+    const ctl = document.createElement('div');
+    ctl.className = 'searchCtl';
+    ctl.innerHTML = `
+      <input id="area" placeholder="ค้นหาย่าน เช่น Sukhumvit / Ekkamai / Thonglor">
+      <button class="btn" id="go">เลือก</button>
+    `;
+    document.getElementById('map').appendChild(ctl);
+    ctl.querySelector('#go').addEventListener('click', ()=>{
+      const v=(ctl.querySelector('#area').value||'Sukhumvit').toLowerCase();
+      invActive = v.startsWith('suk')?'sukhumvit' : v.startsWith('ekk')?'ekkamai' : v.startsWith('tho')?'thonglor' : 'sukhumvit';
+      const a = INV[invActive]; map.setView(a.center,13); heat.setLatLngs(a.heat); setKPI();
+    });
+  }
 
-  // Safe map init
   function initMap(){
-    if (!window.L) { showError('Leaflet ไม่โหลด ลองเช็กเน็ต/CDN'); return null; }
-    try{
-      const m = L.map(mapEl).setView([13.736717, 100.523186], 13);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-        maxZoom:19, attribution:'&copy; OpenStreetMap'
-      }).addTo(m);
-      [[13.7307,100.5402,'Condo A'],[13.7425,100.5167,'Condo B'],[13.7253,100.5101,'Condo C']]
-        .forEach(([lat,lng,label])=>L.marker([lat,lng]).addTo(m).bindPopup(label));
-      return m;
-    }catch(e){ showError('Map init failed: '+e.message); return null; }
+    const el = document.getElementById('map');
+    if (el._leaflet_id) { const p=el.parentNode, n=el.cloneNode(false); n.id='map'; p.replaceChild(n,el); }
+    const mapEl = document.getElementById('map');
+    map = L.map(mapEl, {zoomControl:true});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+
+    const a = INV[invActive];
+    map.setView(a.center,13);
+    heat = L.heatLayer(a.heat, {radius:22, blur:16, maxZoom:17}).addTo(map);
+
+    ensureSearchCtl();
+    setKPI();
   }
 
-  // Bench renderer
-  function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
-  function renderRange(mount, data){
-    mount.innerHTML=''; if(!data||!(data.min>0)||!(data.max>data.min)) return;
-    const wrap=document.createElement('div'); wrap.className='range-wrap';
-    const t=document.createElement('div'); t.className='range-title'; t.textContent=data.title||'ช่วงราคา';
-    const bar=document.createElement('div'); bar.className='range-bar';
-    const frame=document.createElement('div'); frame.className='range-frame';
-    const marker=document.createElement('div'); marker.className='range-marker';
-    const tag=document.createElement('div'); tag.className='range-tag'; tag.textContent=`ราคาของคุณ: ${fmt(data.actual)} ${data.unit||''}`;
-    const labels=document.createElement('div'); labels.className='range-labels';
-    labels.innerHTML=`<span>${fmt(data.min)}</span><span>${fmt(data.max)}</span>`;
-    const note=document.createElement('div'); note.className='range-note';
-    bar.appendChild(frame); bar.appendChild(marker); bar.appendChild(tag);
-    wrap.appendChild(t); wrap.appendChild(bar); wrap.appendChild(labels); wrap.appendChild(note);
-    mount.appendChild(wrap);
-    function position(){
-      const rect=bar.getBoundingClientRect();
-      const a=clamp(data.actual??data.min,data.min,data.max);
-      const p=(a-data.min)/(data.max-data.min); const x=p*rect.width;
-      marker.style.left=x+'px'; tag.style.left=x+'px';
-      const mid=(data.min+data.max)/2, diff=((a-mid)/mid)*100;
-      const zone=p<.33?'ช่วงล่าง':(p>.67?'ช่วงบน':'กลางช่วง');
-      note.innerHTML=`ตำแหน่ง: <b>${zone}</b> (ต่างจากค่ากลาง ~${diff.toFixed(1)}%)`;
-    }
-    position(); window.addEventListener('resize',position);
+  function initSlides(){
+    const track = document.getElementById('track');
+    const dots  = [...document.querySelectorAll('.dot')];
+    let cur=1;
+    const show = (n)=>{ cur=Math.max(1,Math.min(4,n)); track.style.transform=`translateX(${-(cur-1)*100}%)`; dots.forEach(d=>d.setAttribute('aria-selected', d.dataset.go==cur?'true':'false')); };
+
+    const frame = track.parentElement;
+    let sx=0,sy=0,dx=0,dy=0,drag=false;
+    frame.addEventListener('pointerdown',e=>{drag=true;sx=e.clientX;sy=e.clientY;frame.setPointerCapture(e.pointerId);});
+    frame.addEventListener('pointermove',e=>{if(!drag)return;dx=e.clientX-sx;dy=e.clientY-sy;});
+    frame.addEventListener('pointerup',()=>{if(!drag)return;drag=false; if(Math.abs(dx)>80 && Math.abs(dx)>Math.abs(dy)) show(cur+(dx>0?-1:1)); dx=dy=0;});
+    dots.forEach(d=>d.addEventListener('click',()=>show(+d.dataset.go)));
+    show(1);
   }
 
-  // Charts
-  let donutChart=null, barVChart=null;
-  function renderRenovator(){
-    if (!window.Chart){ showError('Chart.js ไม่โหลด'); return; }
-    const holdings=[
-      {investor:'Alpha Fund',positions:[{pnl:15000},{pnl:-5000}]},
-      {investor:'Beta Capital',positions:[{pnl:8000},{pnl:3000},{pnl:-2000}]},
-      {investor:'Solo Investor',positions:[{pnl:12000}]},
-      {investor:'Gamma Trust',positions:[{pnl:4000},{pnl:2000}]},
-    ];
-    const labels=holdings.map(h=>h.investor);
-    const unitCounts=holdings.map(h=>h.positions.length);
-    const profits=holdings.map(h=>h.positions.reduce((s,p)=>s+(Number(p.pnl)||0),0));
-    const netTotal=profits.reduce((s,n)=>s+n,0);
-
-    document.getElementById('kpiI').textContent=fmt(holdings.length);
-    document.getElementById('kpiU').textContent=fmt(unitCounts.reduce((a,b)=>a+b,0));
-    const kN=document.getElementById('kpiN'); kN.textContent=(netTotal>=0?'+':'–')+'฿'+fmt(Math.abs(netTotal));
-    kN.classList.toggle('pos',netTotal>=0); kN.classList.toggle('neg',netTotal<0);
-
-    donutChart&&donutChart.destroy();
-    donutChart=new Chart(document.getElementById('donut'),{
-      type:'doughnut',
-      data:{labels,datasets:[{data:unitCounts,backgroundColor:labels.map((_,i)=>soft(i)),borderColor:'#fff',borderWidth:2}]},
-      options:{responsive:true,maintainAspectRatio:false,cutout:'55%',
-        plugins:{legend:{position:'bottom',labels:{color:'#12333A',font:{weight:'bold'}}},
-                 tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.raw} ห้อง`}}}}
-    });
-
-    barVChart&&barVChart.destroy();
-    barVChart=new Chart(document.getElementById('barV'),{
-      type:'bar',
-      data:{labels,datasets:[{label:'Net P/L (บาท)',data:profits,backgroundColor:profits.map(v=>v>=0?'#2E7D5B':'#d44a54')}]},
-      options:{responsive:true,maintainAspectRatio:false,
-        scales:{
-          y:{beginAtZero:true,grid:{color:'rgba(18,51,58,0.12)'},ticks:{color:'#12333A',callback:v=>'฿'+fmt(v)}},
-          x:{grid:{display:false},ticks:{color:'#12333A'}}
-        },
-        plugins:{legend:{display:false}}
-      }
-    });
-
-    renderRange(document.getElementById('benchMarket'),{title:'ช่วงราคาตลาด (ยูนิตใกล้เคียง)',unit:'บาท/เดือน',min:18000,max:20000,actual:19000});
-    renderRange(document.getElementById('benchOwner'), {title:'ช่วงแนะนำ (Developer)',unit:'บาท/เดือน',min:18500,max:20500,actual:19800});
-  }
-
-  // Right pane JSON (optional)
-  async function loadLens(lens){
-    try{
-      const res=await fetch(`./${lens}.json?v=${Date.now()}`,{cache:'no-store'});
-      if(!res.ok) throw 0;
-      return await res.json();
-    }catch{ return {}; }
-  }
-
-  // Lens apply
-  async function applyLens(lens){
-    Object.entries(lensBtns).forEach(([id,btn])=>{
-      btn.classList.toggle('active', id===lens);
-      btn.setAttribute('aria-selected', id===lens ? 'true' : 'false');
-    });
-    const isReno = (lens==='renovator');
-    mapEl.style.display = isReno ? 'none' : 'block';
-    renoEl.style.display = isReno ? 'block' : 'none';
-    if (isReno) renderRenovator();
-
-    const c = await loadLens(lens);
-    document.getElementById('lensTag').textContent = c.tag || (isReno?'รีโนเวท/ดีเวลอป':(lens==='investor'?'นักลงทุน':'ผู้เช่า'));
-    document.getElementById('subtitle').textContent = c.subtitle || (isReno ? 'แดชบอร์ดพอร์ตการลงทุน (เดโม่)' : 'ภาพรวมสำหรับผู้อาศัย');
-    document.getElementById('meterFill').style.width = Math.round((c.meter ?? 0.6)*100)+'%';
-    document.getElementById('kpiLeftDesc').textContent = c.kpiLeftDesc || 'CBD ~ 18 นาที • BTS ~ 6 นาที';
-    document.getElementById('kpiRightTitle').textContent= c.kpiRightTitle || 'รีวิวล่าสุด';
-    document.getElementById('kpiRightDesc').textContent = c.kpiRightDesc  || '“ย่านเงียบช่วงกลางคืน มีร้านสะดวกซื้อใกล้ ๆ”';
-    document.getElementById('detailsText').innerHTML   = c.detailsText   || '• ตัวอย่างข้อความรายละเอียดจากไฟล์ JSON';
-
-    localStorage.setItem('pd_lens', lens);
-  }
-
-  // Bind buttons (robust)
-  lensBtns.tenant?.addEventListener('click', ()=>applyLens('tenant'));
-  lensBtns.investor?.addEventListener('click', ()=>applyLens('investor'));
-  lensBtns.renovator?.addEventListener('click', ()=>applyLens('renovator'));
-
-  // Boot
-  const m = initMap();
-  if (!m) log('Map failed to init');
-  applyLens(localStorage.getItem('pd_lens') || 'tenant');
-});
-</script>
-  </script>
- (() => {
-/* ===== 0) CSS แบบ scoped ไม่ชนของเดิม ===== */
-const css = `
-.pd-hide{display:none !important}
-.pd-investor-panel{background:#fff;border:1px solid #E6EEEC;border-radius:12px;padding:12px;min-width:280px;max-width:360px;box-sizing:border-box}
-.pd-investor-panel .kpis{display:flex;gap:8px;margin:0 0 10px}
-.pd-investor-panel .kpi{flex:1;border:1px solid #E6EEEC;border-radius:12px;padding:10px}
-.pd-investor-panel small{color:#6A7D80}
-.pd-investor-panel b{font-size:20px;color:#0E3F38}
-.pd-investor-panel .frame{position:relative;border:1px solid #E6EEEC;border-radius:12px;overflow:hidden;background:#fff}
-.pd-investor-panel .track{display:flex;transition:transform .35s ease;will-change:transform}
-.pd-investor-panel .slide{min-width:100%;padding:12px}
-.pd-investor-panel .slide h4{margin:0 0 8px}
-.pd-investor-panel .facts{margin:6px 0 0 18px;line-height:1.6}
-.pd-investor-panel .dots{display:flex;justify-content:center;gap:8px;margin-top:8px}
-.pd-investor-panel .dot{width:22px;height:6px;border-radius:999px;background:#E0E7E4;border:0;cursor:pointer}
-.pd-investor-panel .dot[aria-selected="true"]{background:#1F6F63}
-.map-searchCtl{position:absolute;z-index:800;left:10px;top:10px;background:#fff;border:1px solid #E6EEEC;border-radius:999px;padding:6px;display:flex;gap:6px;align-items:center;box-shadow:0 6px 14px rgba(0,0,0,.08)}
-.map-searchCtl input{border:0;outline:none;padding:6px 8px;width:220px;border-radius:999px;font-weight:700;color:#0E3F38}
-.map-searchCtl button{background:#1F6F63;color:#fff;border:0;border-radius:999px;padding:6px 10px;font-weight:700;cursor:pointer}
-`; const st=document.createElement('style'); st.textContent=css; document.head.appendChild(st);
-
-/* ===== 1) โหลด leaflet.heat ถ้ายังไม่มี ===== */
-function loadOnce(src, test, cb){ if(test()) return cb&&cb(); const s=document.createElement('script'); s.src=src; s.defer=true; s.onload=cb||(()=>{}); document.head.appendChild(s); }
-loadOnce('https://unpkg.com/leaflet.heat/dist/leaflet-heat.js', ()=>window.L && L.heatLayer);
-
-/* ===== 2) ข้อมูลตัวอย่าง (เสียบ JSON จริงทีหลังได้) ===== */
-window.INV = {
-  sukhumvit:{ center:[13.7336,100.5760],
-    heat:[[13.732,100.572,0.9],[13.735,100.581,0.8],[13.728,100.583,0.7],[13.739,100.575,0.65]],
-    kpi:{yield:5.6,cap:4.2}
-  }
-};
-['ekkamai','thonglor','phromphong','onnut','ratchada'].forEach(k=>{
-  INV[k]=JSON.parse(JSON.stringify(INV.sukhumvit));
-  INV[k].kpi={yield:+(5.1+Math.random()*0.8).toFixed(1),cap:+(3.7+Math.random()*0.6).toFixed(1)};
-});
-
-let invActive='sukhumvit', heatLayer=null;
-
-/* ===== 3) หา panel ขวา “ตัวเดิม” แล้วซ่อน จากนั้นสร้างของเราเองข้างๆ ===== */
-function ensureInvestorPanel(){
-  const mapEl=document.getElementById('map'); if(!mapEl) return null;
-  const colMap = mapEl.parentElement, container = colMap?.parentElement || document.body;
-  // เลือก sibling ที่ดูเป็นพาเนลเดิม แล้วซ่อน
-  const sibs=[...container.children].filter(el=>el!==colMap);
-  const old = sibs.sort((a,b)=>(b.textContent||'').length-(a.textContent||'').length)[0];
-  if (old) old.classList.add('pd-hide');
-
-  // มีกล่องของเราหรือยัง
-  let panel=document.querySelector('.pd-investor-panel');
-  if (!panel){ panel=document.createElement('aside'); panel.className='pd-investor-panel'; container.appendChild(panel); }
-  return panel;
-}
-
-/* ===== 4) เรนเดอร์พาเนลใหม่ (สไลด์ 4 หน้า) ===== */
-function renderInvestorPanel(){
-  const a = (window.INV && window.INV[window.invActive]) || (window.INV && window.INV.sukhumvit) || {kpi:{yield:'—',cap:'—'}};
-  const panel=ensureInvestorPanel(); if(!panel) return;
-
-  panel.innerHTML = `
-    <div class="kpis">
-      <div class="kpi"><small>Yield (ย่าน)</small><b>${a.kpi.yield}%</b></div>
-      <div class="kpi"><small>Cap Rate (ย่าน)</small><b>${a.kpi.cap}%</b></div>
-    </div>
-    <div class="frame"><div class="track">
-      <section class="slide"><h4>วิธีอ่าน Heat Map</h4>
-        <ul class="facts">
-          <li>สีเข้ม = ความหนาแน่นกิจกรรมตลาดสูง (ธุรกรรม/ความสนใจ/สต็อกหมุนเวียน)</li>
-          <li>สีอ่อน = ความหนาแน่นต่ำ</li>
-          <li>ค้นหาย่านเพื่อซูมไปยังบริเวณนั้น</li>
-        </ul>
-      </section>
-      <section class="slide"><h4>Demand & Liquidity</h4>
-        <ul class="facts">
-          <li><b>Take-up Rate</b> % การขายช่วงเปิดตัว (สูง = ขายไว)</li>
-          <li><b>Absorption</b> ยูนิตขายออกต่อช่วงเวลา</li>
-          <li><b>Overhang</b> ยูนิตคงค้าง (ต่ำ = ระบายได้ดี)</li>
-        </ul>
-      </section>
-      <section class="slide"><h4>Supply & Rental</h4>
-        <ul class="facts">
-          <li><b>New Projects</b> สะท้อนเม็ดเงินลงทุน/ความมั่นใจ</li>
-          <li><b>Yield vs Cap</b> เทียบผลตอบแทนขั้นต้น/หลังค่าใช้จ่าย</li>
-        </ul>
-      </section>
-      <section class="slide"><h4>Price Metrics (10 ปี)</h4>
-        <ul class="facts">
-          <li><b>Launch</b> ราคาเปิดตัว</li>
-          <li><b>Resale</b> ราคามือสอง</li>
-          <li><b>Treasury</b> baseline สำหรับเทียบระยะยาว</li>
-        </ul>
-      </section>
-    </div></div>
-    <div class="dots" role="tablist" aria-label="Investor pages">
-      <button class="dot" data-go="1" aria-selected="true"></button>
-      <button class="dot" data-go="2"></button>
-      <button class="dot" data-go="3"></button>
-      <button class="dot" data-go="4"></button>
-    </div>
-  `;
-
-  // สไลด์
-  const frame=panel.querySelector('.frame'), track=panel.querySelector('.track'), dots=[...panel.querySelectorAll('.dot')];
-  let cur=1; const show=n=>{cur=Math.max(1,Math.min(4,n)); track.style.transform=`translateX(${-(cur-1)*100}%)`; dots.forEach(d=>d.setAttribute('aria-selected', d.dataset.go==cur?'true':'false'));}
-  let sx=0,sy=0,dx=0,dy=0,drag=false;
-  frame.addEventListener('pointerdown',e=>{drag=true;sx=e.clientX;sy=e.clientY;frame.setPointerCapture(e.pointerId);});
-  frame.addEventListener('pointermove',e=>{if(!drag)return;dx=e.clientX-sx;dy=e.clientY-sy;});
-  frame.addEventListener('pointerup',()=>{if(!drag)return;drag=false;if(Math.abs(dx)>80&&Math.abs(dx)>Math.abs(dy)) show(cur+(dx>0?-1:1)); dx=dy=0;});
-  dots.forEach(d=>d.addEventListener('click',()=>show(+d.dataset.go)));
-  show(1);
-}
-
-/* ===== 5) แทนที่แผนที่เดิมด้วย Heat Map (ไม่ทำลาย layout) ===== */
-function openInvestor(){
-  const el=document.getElementById('map'); if(!el) return;
-
-  // กัน error container initialized → clone ใหม่
-  if (el._leaflet_id || el._leaflet) { const p=el.parentNode, n=el.cloneNode(false); n.id='map'; p.replaceChild(n,el); }
-  const mapEl=document.getElementById('map'); mapEl.style.position='relative';
-
-  // ถ้า leaflet หรือ heat ยังมาไม่ทัน ให้รอหน่อย
-  if (!window.L) return setTimeout(openInvestor,60);
-  if (!window.L.heatLayer) return setTimeout(openInvestor,60);
-
-  const map=L.map(mapEl,{zoomControl:true});
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
-
-  const a = INV[invActive] || INV.sukhumvit;
-  map.setView(a.center,13);
-  heatLayer && map.removeLayer(heatLayer);
-  heatLayer = L.heatLayer(a.heat,{radius:22,blur:16,maxZoom:17}).addTo(map);
-
-  // กล่องค้นหาย่าน
-  if (!document.querySelector('.map-searchCtl')){
-    const ctl=document.createElement('div');
-    ctl.className='map-searchCtl';
-    ctl.innerHTML=`<input id="invArea" placeholder="ค้นหาย่าน เช่น Sukhumvit"><button id="invGo">เลือก</button>`;
-    mapEl.appendChild(ctl);
-    ctl.querySelector('#invGo').addEventListener('click',()=>{
-      const v=(ctl.querySelector('#invArea').value||'Sukhumvit').toLowerCase();
-      const key = v.startsWith('suk')?'sukhumvit':v.startsWith('ekk')?'ekkamai':v.startsWith('tho')?'thonglor':
-                  v.startsWith('phr')?'phromphong':v.startsWith('on')?'onnut':v.startsWith('rat')?'ratchada':'sukhumvit';
-      invActive=key;
-      const a2=INV[key];
-      map.setView(a2.center,13);
-      heatLayer && heatLayer.setLatLngs(a2.heat);
-      renderInvestorPanel();
-    });
-  }
-
-  renderInvestorPanel();
-}
-
-/* ===== 6) Hook ปุ่ม “นักลงทุน” + URL ===== */
-function bindInvestorOpeners(){
-  // ปุ่ม/ชิปที่มีคำว่า “นักลงทุน”
-  const targets=[...document.querySelectorAll('a,button,[role="button"],.chip,.tab,.btn')]
-    .filter(el=>/นักลงทุน/.test((el.textContent||'').trim()));
-  targets.forEach(el=>{
-    el.addEventListener('click',(e)=>{ e.preventDefault(); openInvestor(); try{localStorage.setItem('pd_lens','investor')}catch(_){}; },{capture:true});
-    el.removeAttribute('href');
+  document.addEventListener('DOMContentLoaded', ()=>{
+    initMap();
+    initSlides();
   });
-
-  // URL ?lens=investor
-  const p=new URLSearchParams(location.search);
-  if (p.get('lens')==='investor') openInvestor();
-
-  // last lens
-  try{ if(localStorage.getItem('pd_lens')==='investor') openInvestor(); }catch(_){}
-}
-
-document.addEventListener('DOMContentLoaded', bindInvestorOpeners);
-})();
-</script>
+  </script>
 </body>
 </html>
-  
