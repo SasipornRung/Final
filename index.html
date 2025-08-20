@@ -224,3 +224,65 @@
       </div></div>
       <div class="dots" role="tablist" aria-label="Investor pages">
         <button class="dot" data-go="1" aria-selected="true"></button>
+        <button class="dot" data-go="2"></button>
+        <button class="dot" data-go="3"></button>
+        <button class="dot" data-go="4"></button>
+      </div>
+    `;
+
+    // slide controls
+    const frame = panel.querySelector('.frame');
+    const track = panel.querySelector('.track');
+    const dots  = [...panel.querySelectorAll('.dot')];
+    let cur=1;
+    const show = n => {
+      cur=Math.max(1,Math.min(4,n));
+      track.style.transform = `translateX(${-(cur-1)*100}%)`;
+      dots.forEach(d=>d.setAttribute('aria-selected', d.dataset.go==cur?'true':'false'));
+    };
+    let sx=0,sy=0,dx=0,dy=0,drag=false;
+    frame.addEventListener('pointerdown',e=>{drag=true;sx=e.clientX;sy=e.clientY;frame.setPointerCapture(e.pointerId);});
+    frame.addEventListener('pointermove',e=>{if(!drag)return;dx=e.clientX-sx;dy=e.clientY-sy;});
+    frame.addEventListener('pointerup',()=>{if(!drag)return;drag=false;if(Math.abs(dx)>80&&Math.abs(dx)>Math.abs(dy)) show(cur+(dx>0?-1:1)); dx=dy=0;});
+    dots.forEach(d=>d.addEventListener('click',()=>show(+d.dataset.go)));
+    show(1);
+  }
+
+  /* ========== Lens switching ========== */
+  function applyLens(lens){
+    // toggle chip
+    document.querySelectorAll('.chip').forEach(ch=>ch.setAttribute('aria-current', String(ch.dataset.lens===lens)));
+    if (lens==='investor') {
+      openInvestor();
+      try{localStorage.setItem('pd_lens','investor')}catch(e){}
+    } else {
+      // reset to base view
+      const mapCol = document.getElementById('map').parentElement;
+      const container = mapCol.parentElement;
+      // remove investor panel if exists
+      const invPanel = document.querySelector('.pd-investor-panel');
+      if (invPanel) invPanel.remove();
+      // show original right panel
+      const right = document.getElementById('right');
+      if (right) right.style.display='';
+      initBaseMap();
+      try{localStorage.setItem('pd_lens', lens)}catch(e){}
+    }
+  }
+
+  // boot
+  document.addEventListener('DOMContentLoaded', ()=>{
+    initBaseMap();
+    // lens buttons
+    document.querySelectorAll('.chip').forEach(btn=>{
+      btn.addEventListener('click', ()=>applyLens(btn.dataset.lens));
+    });
+    // auto open via URL or last lens
+    const p=new URLSearchParams(location.search);
+    const last = p.get('lens') || (localStorage.getItem('pd_lens')||'tenant');
+    applyLens(last);
+  });
+  </script>
+</body>
+</html>
+        
