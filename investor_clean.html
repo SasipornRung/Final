@@ -3,53 +3,85 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Investor Lens • Minimal Heatmap</title>
+  <title>Investor Lens • Minimal Heatmap (Strong)</title>
 
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
     html,body{height:100%;margin:0;font-family:system-ui,Segoe UI,Roboto,Arial}
-    #status{position:fixed;top:8px;left:8px;background:#fff;border:1px solid #ddd;
-            border-radius:8px;padding:6px 10px;font-size:13px;z-index:9999}
-    #map{height:100%;min-height:520px}
+    #map{height:100%}
+    #status{position:fixed;z-index:9999;top:8px;left:8px;background:#fff;border:1px solid #ddd;border-radius:8px;
+            padding:6px 10px;font-size:13px;box-shadow:0 6px 14px rgba(0,0,0,.08)}
+    .ok{color:#0e6b3b;font-weight:700}
+    .bad{color:#b02929;font-weight:700}
+    .ctl{position:absolute;z-index:800;left:10px;top:10px;background:#fff;border:1px solid #e6eeec;border-radius:999px;
+         padding:6px;display:flex;gap:6px;align-items:center;box-shadow:0 6px 14px rgba(0,0,0,.08)}
+    .ctl input{border:0;outline:none;padding:6px 8px;width:220px;border-radius:999px;font-weight:700}
+    .ctl button{border:0;background:#1F6F63;color:#fff;border-radius:999px;padding:8px 12px;font-weight:800;cursor:pointer}
   </style>
 </head>
 <body>
   <div id="status">Loading…</div>
   <div id="map"></div>
 
-  <!-- Leaflet JS -->
+  <!-- Leaflet JS + Heat -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <!-- Heat plugin -->
   <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 
   <script>
-    // ให้แน่ใจว่าไฟล์โหลดแล้วค่อย init
+    // --- DATA (ชั่วคราว) ---
+    const INV = {
+      sukhumvit: { center:[13.736,100.576], heat: [
+        [13.736,100.576,1.0],[13.740,100.580,0.9],[13.730,100.572,0.85],
+        [13.734,100.585,0.8],[13.741,100.569,0.75],[13.728,100.579,0.7]
+      ]},
+      ekkamai:   { center:[13.727,100.587], heat: [[13.727,100.587,0.95],[13.731,100.590,0.8],[13.724,100.584,0.7]]},
+      thonglor:  { center:[13.731,100.582], heat: [[13.731,100.582,0.9],[13.734,100.584,0.8],[13.728,100.580,0.7]]}
+    };
+    let active = 'sukhumvit';
+
+    // --- INIT ---
     window.addEventListener('load', function(){
-      try{
-        const s = document.getElementById('status');
-        s.textContent = 'Leaflet ' + (window.L?'OK':'FAIL') + ' | Heat ' + (L && L.heatLayer?'OK':'FAIL');
+      const status = document.getElementById('status');
+      const hasLeaflet = !!(window.L && typeof L.map === 'function');
+      const hasHeat = !!(window.L && L.heatLayer);
+      status.innerHTML = `Leaflet: <span class="${hasLeaflet?'ok':'bad'}">${hasLeaflet?'OK':'FAIL'}</span> |
+                          Heat: <span class="${hasHeat?'ok':'bad'}">${hasHeat?'OK':'FAIL'}</span>`;
 
-        // สร้างแผนที่
-        const map = L.map('map').setView([13.736, 100.576], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19
-        }).addTo(map);
+      if (!hasLeaflet || !hasHeat) return;
 
-        // จุดตัวอย่าง heat map (ค่าที่สามคือ intensity 0–1)
-        const heatPoints = [
-          [13.736, 100.576, 0.9],
-          [13.745, 100.582, 0.7],
-          [13.729, 100.580, 0.5],
-          [13.732, 100.570, 0.6]
-        ];
-        L.heatLayer(heatPoints, {radius: 22, blur: 16, maxZoom: 17}).addTo(map);
+      // กัน container ถูก init ซ้ำ
+      const el = document.getElementById('map');
+      if (el._leaflet_id) { const p=el.parentNode, n=el.cloneNode(false); n.id='map'; p.replaceChild(n,el); }
 
-        s.textContent += ' | Map OK';
-      }catch(e){
-        document.getElementById('status').textContent += ' | ERROR: ' + e.message;
-        console.error(e);
-      }
+      // สร้างแผนที่
+      const map = L.map('map').setView(INV[active].center, 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
+
+      // สร้าง Heat Layer (ตั้งค่าให้เห็นชัด)
+      const layer = L.heatLayer(INV[active].heat, {
+        radius: 32,          // ใหญ่ขึ้นเพื่อเห็นชัด
+        blur: 18,
+        maxZoom: 17,
+        gradient: {0.3:'#4FC3F7', 0.6:'#FFF176', 0.8:'#FFA726', 1.0:'#E53935'} // น้ำเงิน→เหลือง→ส้ม→แดง
+      }).addTo(map);
+
+      // กล่องค้นหาแบบเร็ว
+      const ctl = document.createElement('div');
+      ctl.className='ctl';
+      ctl.innerHTML = `
+        <input id="area" placeholder="Sukhumvit / Ekkamai / Thonglor">
+        <button id="go">เลือก</button>`;
+      document.getElementById('map').appendChild(ctl);
+
+      ctl.querySelector('#go').addEventListener('click', ()=>{
+        const v=(ctl.querySelector('#area').value||'Sukhumvit').toLowerCase();
+        active = v.startsWith('ekk')?'ekkamai' : v.startsWith('tho')?'thonglor' : 'sukhumvit';
+        map.setView(INV[active].center, 13);
+        layer.setLatLngs(INV[active].heat);
+      });
+
+      status.innerHTML += ` | Map: <span class="ok">OK</span>`;
     });
   </script>
 </body>
