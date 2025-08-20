@@ -4,43 +4,56 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Investor Lens • Heat + KPI + Slides</title>
+
+  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
   <style>
-    :root{--green:#1F6F63;--green-700:#0E3F38;--muted:#6A7D80;--line:#E6EEEC;--bg:#F6FAF9}
-    *{box-sizing:border-box}html,body{height:100%;margin:0;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial;background:var(--bg);color:#142a2a}
+    :root{
+      --green:#1F6F63; --green-700:#0E3F38; --muted:#6A7D80; --line:#E6EEEC; --bg:#F6FAF9;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial;background:var(--bg);color:#142a2a}
     header{padding:14px 16px;display:flex;gap:10px;align-items:center}
     .badge{background:#E9F6F0;color:var(--green-700);font-weight:800;padding:6px 10px;border-radius:8px}
     h1{font-size:18px;margin:0}
     .wrap{padding:0 16px 16px}
     .row{display:grid;grid-template-columns:1.35fr .9fr;gap:12px}
-    @media(max-width:980px){.row{grid-template-columns:1fr}}
+    @media (max-width:980px){.row{grid-template-columns:1fr}}
 
+    /* Map */
     #map{height:66vh;min-height:420px;background:#fff;border:1px solid var(--line);border-radius:12px;position:relative;overflow:hidden}
-    .searchCtl{position:absolute;z-index:800;left:10px;top:10px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px;display:flex;gap:6px;align-items:center;box-shadow:0 6px 14px rgba(0,0,0,.08)}
-    .searchCtl input{border:0;outline:none;padding:6px 8px;width:220px;border-radius:999px;font-weight:700;color:var(--green-700)}
+    .searchCtl{position:absolute;z-index:800;left:10px;top:10px;background:#fff;border:1px solid var(--line);
+      border-radius:999px;padding:6px;display:flex;gap:6px;align-items:center;box-shadow:0 6px 14px rgba(0,0,0,.08)}
+    .searchCtl input{border:0;outline:none;padding:6px 8px;width:240px;border-radius:999px;font-weight:700;color:var(--green-700)}
     .btn{background:var(--green);color:#fff;border:0;border-radius:999px;padding:8px 12px;font-weight:800;cursor:pointer}
 
+    /* Right panel */
     .panel{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;min-height:66vh}
     .kpis{display:flex;gap:8px;margin:0 0 10px}
     .kpi{flex:1;border:1px solid var(--line);border-radius:12px;padding:10px}
     .kpi small{color:var(--muted)} .kpi b{color:var(--green-700);font-size:20px}
 
+    /* Slides */
     .frame{position:relative;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
     .track{display:flex;transition:transform .35s ease;will-change:transform}
     .slide{min-width:100%;padding:12px}
     .slide h3{margin:0 0 8px;font-size:16px}
     .facts{margin:6px 0 0 18px;line-height:1.6}
-    .dots{display:flex;justify-content:center;gap:8px;margin-top:8px}
-    .dot{width:22px;height:6px;border-radius:999px;background:#E0E7E4;border:0;cursor:pointer}
+    .dots{display:flex;justify-content:center;gap:10px;margin-top:10px}
+    .dot{width:28px;height:8px;border-radius:999px;background:#E0E7E4;border:0;cursor:pointer}
     .dot[aria-selected="true"]{background:var(--green)}
 
+    /* Diagnostic */
     .diag{position:fixed;left:8px;top:8px;z-index:2000;background:#fff;border:1px solid #ddd;border-radius:8px;padding:6px 8px;font-size:13px;display:flex;gap:8px;align-items:center;box-shadow:0 6px 14px rgba(0,0,0,.08)}
-    .pill{padding:2px 8px;border-radius:999px;background:#eee}.ok{background:#DFF5E1;color:#0E6B3B}.bad{background:#FFE2E2;color:#A13232}
+    .pill{padding:2px 8px;border-radius:999px;background:#eee}
+    .ok{background:#DFF5E1;color:#0E6B3B} .bad{background:#FFE2E2;color:#A13232}
   </style>
 </head>
 <body>
   <header><div class="badge">PD</div><h1>Investor Lens • Heat + KPI + Slides</h1></header>
 
+  <!-- Diagnostic status (ซ่อนอัตโนมัติเมื่อ DEBUG=false) -->
   <div class="diag">
     <span>STATUS:</span>
     <span id="sLeaflet" class="pill bad">Leaflet ❌</span>
@@ -50,8 +63,10 @@
 
   <div class="wrap">
     <div class="row">
+      <!-- MAP -->
       <section><div id="map"></div></section>
 
+      <!-- RIGHT PANEL -->
       <aside class="panel">
         <div class="kpis">
           <div class="kpi"><small>Yield (ย่าน)</small><b id="kpiYield">—</b></div>
@@ -60,35 +75,39 @@
 
         <div class="frame">
           <div class="track" id="track">
+            <!-- Slide 1 -->
             <section class="slide">
               <h3>วิธีอ่าน Heat Map</h3>
               <ul class="facts">
                 <li>สีเข้ม = ความหนาแน่นกิจกรรมสูง</li>
                 <li>สีอ่อน = ความหนาแน่นต่ำ</li>
-                <li>ค้นหาย่าน แล้วกด “เลือก” แผนที่จะซูมไปยังย่านนั้น</li>
+                <li>ค้นหาย่าน แล้วกด “เลือก” แผนที่จะซูมไปย่านนั้น</li>
               </ul>
             </section>
+            <!-- Slide 2 -->
             <section class="slide">
               <h3>Demand & Liquidity</h3>
               <ul class="facts">
-                <li><b>Take-up Rate</b> = % ยูนิตที่ขายได้ช่วงเปิดตัว</li>
-                <li><b>Absorption</b> = ยูนิตที่ขายออกต่อรอบเวลา</li>
+                <li><b>Take-up Rate</b> = % ยูนิตขายได้ช่วงเปิดตัว</li>
+                <li><b>Absorption</b> = ยูนิตขายออกต่อรอบเวลา</li>
                 <li><b>Overhang</b> = ยูนิตเหลือขาย</li>
               </ul>
             </section>
+            <!-- Slide 3 -->
             <section class="slide">
               <h3>Supply & Rental</h3>
               <ul class="facts">
-                <li><b>New Projects</b> = เม็ดเงิน/โครงการใหม่</li>
-                <li><b>Yield vs Cap</b> = ผลตอบแทนขั้นต้น vs Cap Rate สุทธิ</li>
+                <li><b>New Projects</b> = เม็ดเงิน/จำนวนโครงการใหม่</li>
+                <li><b>Yield vs Cap</b> = ผลตอบแทนขั้นต้น เทียบ Cap Rate สุทธิ</li>
               </ul>
             </section>
+            <!-- Slide 4 -->
             <section class="slide">
               <h3>Price Metrics (10 ปี)</h3>
               <ul class="facts">
                 <li><b>Launch</b> = ราคาเปิดตัว</li>
                 <li><b>Resale</b> = ราคามือสอง</li>
-                <li><b>Treasury</b> = เส้นอ้างอิง risk-free</li>
+                <li><b>Treasury Benchmark</b> = เส้นอ้างอิง risk-free</li>
               </ul>
             </section>
           </div>
@@ -103,64 +122,124 @@
     </div>
   </div>
 
+  <!-- Leaflet + Heat -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+
   <script>
+    /* =========================
+       CONFIG & SAMPLE DATA
+    ==========================*/
+    const DEBUG = false; // true = โชว์กล่อง STATUS, false = ซ่อน
+
     const INV = {
-      sukhumvit:{ center:[13.736,100.576],
-        heat:[[13.736,100.576,1.0],[13.740,100.580,0.95],[13.730,100.572,0.9],[13.734,100.585,0.85],[13.741,100.569,0.8],[13.728,100.579,0.8],[13.738,100.573,0.75],[13.732,100.570,0.75]],
-        kpi:{yield:5.6,cap:4.2}
+      sukhumvit:{
+        center:[13.736,100.576],
+        heat:[
+          [13.736,100.576,1.0],[13.740,100.580,0.95],[13.730,100.572,0.9],
+          [13.734,100.585,0.85],[13.741,100.569,0.8],[13.728,100.579,0.8],
+          [13.738,100.573,0.75],[13.732,100.570,0.75]
+        ],
+        kpi:{yield:5.6, cap:4.2}
       },
-      ekkamai:{ center:[13.727,100.587],
+      ekkamai:{
+        center:[13.727,100.587],
         heat:[[13.727,100.587,0.95],[13.731,100.590,0.8],[13.724,100.584,0.7]],
-        kpi:{yield:5.2,cap:3.9}
+        kpi:{yield:5.2, cap:3.9}
       },
-      thonglor:{ center:[13.731,100.582],
+      thonglor:{
+        center:[13.731,100.582],
         heat:[[13.731,100.582,0.9],[13.734,100.584,0.8],[13.728,100.580,0.7]],
-        kpi:{yield:5.4,cap:4.0}
+        kpi:{yield:5.4, cap:4.0}
+      },
+      rama9:{
+        center:[13.757,100.565],
+        heat:[[13.757,100.565,0.95],[13.760,100.568,0.8],[13.754,100.562,0.75]],
+        kpi:{yield:5.0, cap:3.7}
       }
     };
     let active='sukhumvit', map, heatLayer;
 
-    function setKPI(){ const a=INV[active]||INV.sukhumvit;
-      document.getElementById('kpiYield').textContent=a.kpi.yield+'%';
-      document.getElementById('kpiCap').textContent=a.kpi.cap+'%';
+    /* =========================
+       HELPERS
+    ==========================*/
+    function setKPI(){
+      const a = INV[active] || INV.sukhumvit;
+      document.getElementById('kpiYield').textContent = a.kpi.yield + '%';
+      document.getElementById('kpiCap').textContent   = a.kpi.cap   + '%';
     }
+
     function ensureSearchCtl(){
-      if(document.querySelector('.searchCtl'))return;
-      const ctl=document.createElement('div'); ctl.className='searchCtl';
-      ctl.innerHTML=`<input id="area" placeholder="Sukhumvit / Ekkamai / Thonglor"><button class="btn" id="go">เลือก</button>`;
+      if (document.querySelector('.searchCtl')) return;
+      const ctl = document.createElement('div');
+      ctl.className='searchCtl';
+      ctl.innerHTML=`
+        <input id="area" placeholder="Sukhumvit / Ekkamai / Thonglor / Rama 9">
+        <button class="btn" id="go">เลือก</button>`;
       document.getElementById('map').appendChild(ctl);
-      ctl.querySelector('#go').addEventListener('click',()=>{
-        const v=(ctl.querySelector('#area').value||'Sukhumvit').toLowerCase();
-        active=v.startsWith('ekk')?'ekkamai':v.startsWith('tho')?'thonglor':'sukhumvit';
-        const a=INV[active]; map.setView(a.center,13); heatLayer.setLatLngs(a.heat); setKPI();
-      });
+
+      const input = ctl.querySelector('#area');
+      const goBtn = ctl.querySelector('#go');
+
+      const apply = () => {
+        const v=(input.value||'Sukhumvit').trim().toLowerCase();
+        active = v.startsWith('ekk')?'ekkamai'
+              : v.startsWith('tho')?'thonglor'
+              : v.includes('rama') || v.includes('พระราม') ? 'rama9'
+              : 'sukhumvit';
+        const a=INV[active];
+        map.setView(a.center, 14);
+        heatLayer.setLatLngs(a.heat);
+        setKPI();
+      };
+
+      goBtn.addEventListener('click', apply);
+      input.addEventListener('keydown', (e)=>{ if (e.key==='Enter') apply(); });
     }
 
+    /* =========================
+       MAP
+    ==========================*/
     function initMap(){
-      const sL=document.getElementById('sLeaflet'), sH=document.getElementById('sHeat'), sM=document.getElementById('sMap');
-      if(window.L&&typeof L.map==='function') sL.className='pill ok';
-      if(window.L&&L.heatLayer)             sH.className='pill ok';
+      const sLeaf = document.getElementById('sLeaflet');
+      const sHeat = document.getElementById('sHeat');
+      const sMap  = document.getElementById('sMap');
 
+      if (window.L && typeof L.map==='function') sLeaf.className='pill ok';
+      if (window.L && L.heatLayer)              sHeat.className='pill ok';
+
+      // reset ถ้ามี instance เดิม
       const el=document.getElementById('map');
-      if(el._leaflet_id){ const p=el.parentNode,n=el.cloneNode(false); n.id='map'; p.replaceChild(n,el); }
+      if (el._leaflet_id){
+        const p=el.parentNode, n=el.cloneNode(false);
+        n.id='map'; p.replaceChild(n,el);
+      }
 
-      map=L.map('map',{zoomControl:true});
+      map = L.map('map',{zoomControl:true});
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
-      map.setView(INV[active].center,13);
 
-      heatLayer=L.heatLayer(INV[active].heat,{
-        radius:34,blur:18,maxZoom:17,opacity:0.9,
-        gradient:{0.3:'#4FC3F7',0.6:'#FFF176',0.8:'#FFA726',1.0:'#E53935'}
+      map.setView(INV[active].center, 14);
+
+      heatLayer = L.heatLayer(INV[active].heat, {
+        radius: 42, blur: 20, maxZoom: 19, opacity: 1,
+        gradient: {0.3:'#4FC3F7',0.6:'#FFF176',0.8:'#FFA726',1.0:'#E53935'}
       }).addTo(map);
 
-      sM.className='pill ok'; ensureSearchCtl(); setKPI();
+      sMap.className='pill ok';
+
+      ensureSearchCtl();
+      setKPI();
     }
 
-    function initSlides(){
-      const track=document.getElementById('track'), dots=[...document.querySelectorAll('.dot')];
-      let cur=1; const show=n=>{cur=Math.max(1,Math.min(4,n));
+    /* =========================
+       SLIDES (ปัด/คลิกดอท)
+    ==========================*/
+      function initSlides(){
+      const track=document.getElementById('track');
+      const dots=[...document.querySelectorAll('.dot')];
+      let cur=1;
+      const show=n=>{
+        cur=Math.max(1,Math.min(4,n));
         track.style.transform=`translateX(${-(cur-1)*100}%)`;
         dots.forEach(d=>d.setAttribute('aria-selected', d.dataset.go==cur?'true':'false'));
       };
@@ -172,15 +251,30 @@
       show(1);
     }
 
+    /* =========================
+       BOOT
+    ==========================*/
     window.addEventListener('load', ()=>{
-      initSlides(); initMap();
-      const q=new URLSearchParams(location.search), area=q.get('area');
-      if(area){ const i=document.getElementById('area'); if(i){ i.value=area; setTimeout(()=>document.getElementById('go')?.click(),400);} }
+      if (!DEBUG) document.querySelector('.diag').style.display='none';
+      initSlides();
+      initMap();
+
+      // รองรับ ?area=sukhumvit
+      const p=new URLSearchParams(location.search); const area=p.get('area');
+      if (area){
+        const i=document.getElementById('area');
+        if (i){ i.value=area; setTimeout(()=>document.getElementById('go')?.click(), 400); }
+      }
     });
 
+    // แสดง error ในกล่อง STATUS (ถ้าเปิด DEBUG)
     window.addEventListener('error', e=>{
-      const b=document.querySelector('.diag'); const div=document.createElement('div');
-      div.textContent='JS Error: '+e.message; div.style.color='#A13232'; b.appendChild(div);
+      if (!DEBUG) return;
+      const b=document.querySelector('.diag');
+      const div=document.createElement('div');
+      div.textContent='JS Error: '+e.message;
+      div.style.color='#A13232';
+      b.appendChild(div);
     });
   </script>
 </body>
