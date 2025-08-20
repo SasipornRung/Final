@@ -603,6 +603,35 @@ try {
   if (current === 'investor') initInvestorLens();
 } catch(e){}
 })();</script>
+  (function(){
+  function openInvestor(){
+    try{ localStorage.setItem('pd_lens','investor'); }catch(e){}
+    if (window.applyLens) { try{ applyLens('investor'); }catch(e){} }
+    const sec = document.getElementById('investorSwipe');
+    if (sec) sec.classList.remove('inv-hidden');
+    const mainMap = document.getElementById('map');
+    if (mainMap) mainMap.style.display = 'none';
+    sec?.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // 1) กดปุ่ม/ชิปคำว่า "นักลงทุน" ที่ไหนก็ได้ ให้เปิดเลนส์นักลงทุน
+    const targets = [...document.querySelectorAll('a,button,.chip,.tab,.lens,.btn')]
+      .filter(el => /นักลงทุน/.test((el.textContent||'').trim()));
+    targets.forEach(el=>{
+      el.addEventListener('click', (e)=>{
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        openInvestor();
+      }, {capture:true}); // ขวาง handler เก่า
+      el.removeAttribute?.('href');
+    });
+
+    // 2) ถ้าเปิดด้วย ?lens=investor ให้เปิดเลนส์ทันที
+    const p = new URLSearchParams(location.search);
+    if (p.get('lens') === 'investor') openInvestor();
+  });
+})();
 <!-- ===== /Investor Lens (Swipe) – DROP-IN PACK ===== -->
 </script>
 </body>
