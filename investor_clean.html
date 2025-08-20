@@ -1,14 +1,13 @@
 <!doctype html>
 <html lang="th">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Investor Lens • Clean Start</title>
 
-  <!-- Leaflet -->
+  <!-- Leaflet + Heat -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <!-- Heatmap -->
   <script defer src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 
   <style>
@@ -58,10 +57,12 @@
 
   <div class="wrap">
     <div class="row">
+      <!-- MAP -->
       <section>
         <div id="map"></div>
       </section>
 
+      <!-- RIGHT PANEL -->
       <aside id="right" class="panel">
         <div class="kpis">
           <div class="kpi"><small>Yield (ย่าน)</small><b id="kpiYield">—</b></div>
@@ -73,19 +74,21 @@
             <section class="slide">
               <h3>วิธีอ่าน Heat Map</h3>
               <ul class="facts">
-                <li>สีเข้ม = ความหนาแน่นกิจกรรมตลาดสูง (ธุรกรรม/ความสนใจ/สต็อกหมุน)</li>
+                <li>สีเข้ม = ความหนาแน่นกิจกรรมตลาดสูง</li>
                 <li>สีอ่อน = ความหนาแน่นต่ำ</li>
-                <li>ค้นหาย่านเพื่อซูมไปยังบริเวณนั้น</li>
+                <li>ค้นหาย่านแล้วกด “เลือก” เพื่อซูม</li>
               </ul>
             </section>
+
             <section class="slide">
               <h3>Demand & Liquidity</h3>
               <ul class="facts">
-                <li><b>Take-up Rate</b> % ขายในช่วงเปิดตัว (สูง = ขายไว)</li>
-                <li><b>Absorption</b> ยูนิตที่ขายออกในช่วงเวลา</li>
-                <li><b>Overhang</b> ยูนิตคงค้าง (ต่ำ = ระบายได้ดี)</li>
+                <li><b>Take-up</b> % ขายในช่วงเปิดตัว (สูง = ขายไว)</li>
+                <li><b>Absorption</b> ยูนิตขายออกต่อช่วงเวลา</li>
+                <li><b>Overhang</b> ยูนิตคงค้าง (ต่ำ = ระบายดี)</li>
               </ul>
             </section>
+
             <section class="slide">
               <h3>Supply & Rental</h3>
               <ul class="facts">
@@ -93,12 +96,13 @@
                 <li><b>Yield vs Cap Rate</b> ขั้นต้น/หลังค่าใช้จ่าย</li>
               </ul>
             </section>
+
             <section class="slide">
               <h3>Price Metrics (10 ปี)</h3>
               <ul class="facts">
                 <li><b>Launch</b> ราคาเปิดตัวโครงการใหม่</li>
                 <li><b>Resale</b> ราคามือสอง</li>
-                <li><b>Treasury</b> ราคาประเมินใช้เป็น baseline</li>
+                <li><b>Treasury</b> baseline ใช้เทียบ</li>
               </ul>
             </section>
           </div>
@@ -114,25 +118,25 @@
   </div>
 
   <script>
-  console.log('INV READY');
-
-  /* -------- Demo data (แทนด้วย JSON จริงภายหลังได้) -------- */
+  /* ---------- Demo data (แทนด้วย JSON จริงภายหลัง) ---------- */
   const INV = {
     sukhumvit:{ center:[13.7336,100.5760],
       heat:[[13.732,100.572,0.9],[13.735,100.581,0.8],[13.728,100.583,0.7],[13.739,100.575,0.65]],
       kpi:{yield:5.6,cap:4.2}
     },
     ekkamai:{ center:[13.727,100.587], heat:[[13.726,100.585,0.8],[13.729,100.589,0.7]], kpi:{yield:5.2,cap:3.9}},
-    thonglor:{ center:[13.731,100.582], heat=[[13.732,100.583,0.75],[13.729,100.580,0.6]], kpi:{yield:5.4,cap:4.0}}
+    thonglor:{ center:[13.731,100.582], heat:[[13.732,100.583,0.75],[13.729,100.580,0.6]], kpi:{yield:5.4,cap:4.0}}
   };
   let invActive='sukhumvit', map, heat;
 
+  /* ---------- KPI ---------- */
   function setKPI(){
     const a = INV[invActive] || INV.sukhumvit;
     document.getElementById('kpiYield').textContent = a.kpi.yield + '%';
     document.getElementById('kpiCap').textContent   = a.kpi.cap   + '%';
   }
 
+  /* ---------- Map + Heat ---------- */
   function ensureSearchCtl(){
     if (document.querySelector('.searchCtl')) return;
     const ctl = document.createElement('div');
@@ -150,17 +154,22 @@
 
   function initMap(){
     const el = document.getElementById('map');
+    // กัน error "Map container is already initialized"
     if (el._leaflet_id) { const p=el.parentNode, n=el.cloneNode(false); n.id='map'; p.replaceChild(n,el); }
     const mapEl = document.getElementById('map');
+
     map = L.map(mapEl, {zoomControl:true});
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+
     const a = INV[invActive];
     map.setView(a.center,13);
     heat = L.heatLayer(a.heat, {radius:22, blur:16, maxZoom:17}).addTo(map);
+
     ensureSearchCtl();
     setKPI();
   }
 
+  /* ---------- Slides ---------- */
   function initSlides(){
     const track = document.getElementById('track');
     const dots  = [...document.querySelectorAll('.dot')];
