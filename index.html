@@ -299,14 +299,14 @@ window.addEventListener('load', () => {
   applyLens(localStorage.getItem('pd_lens') || 'tenant');
 });
 
-// --- Redirect ปุ่ม “นักลงทุน” ไปหน้าใหม่ ---
 document.addEventListener('DOMContentLoaded', () => {
   const investorBtn = [...document.querySelectorAll('a,button')]
     .find(el => /นักลงทุน/.test((el.textContent || '').trim()));
   if (investorBtn) {
     investorBtn.addEventListener('click', (e) => {
       e.preventDefault();
-      location.href = 'index_investor.html?v=20';
+      localStorage.setItem('pd_lens', 'investor'); 
+      applyLens('investor');
     });
   }
 });
