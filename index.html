@@ -457,5 +457,150 @@ window.addEventListener('load', () => {
 })();
 </script>
 <!-- ===== /Investor Overlay ===== -->
+  <script>
+/* ===== Patch: Replace right panel with 4-slide swiper ===== */
+(() => {
+  /* 1) CSS สำหรับสไลด์ + จุดบอกหน้า */
+  const css = `
+  .inv-swiper{display:flex;flex-direction:column;gap:10px}
+  .inv-frame{position:relative;border:1px solid #E6EEEC;border-radius:12px;overflow:hidden;background:#fff}
+  .inv-track{display:flex;transition:transform .35s ease;will-change:transform}
+  .inv-slide{min-width:100%;padding:12px}
+  .inv-slide h4{margin:0 0 8px 0}
+  .inv-kpis{display:flex;gap:8px;margin:6px 0 10px}
+  .kpi{flex:1;border:1px solid #E6EEEC;border-radius:12px;padding:10px}
+  .kpi small{color:#6A7D80}
+  .kpi b{font-size:20px;color:#0E3F38}
+  .inv-facts{margin:6px 0 0 18px;padding:0;line-height:1.6}
+  .inv-dots{display:flex;justify-content:center;gap:8px;margin-top:8px}
+  .inv-dots .dot{width:22px;height:6px;border-radius:999px;background:#E0E7E4;border:0;cursor:pointer}
+  .inv-dots .dot[aria-selected="true"]{background:#1F6F63}
+  `;
+  const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
+
+  /* 2) ตัวช่วยหาแผงขวา “ตัวจริง” แล้วคืน element ที่พร้อมเขียนทับ */
+  function _findRightPanel() {
+    // 2.1 ลองเซเลกเตอร์ที่เป็นไปได้ก่อน
+    let p = document.querySelector('#infoPanel, .details, .right-panel, .sidebar, [data-role="right-panel"]');
+    if (p) return p;
+
+    // 2.2 เดา sibling ของกล่องแผนที่
+    const mapEl = document.getElementById('map');
+    if (mapEl && mapEl.parentElement && mapEl.parentElement.parentElement) {
+      const wrap = mapEl.parentElement;
+      const siblings = [...wrap.parentElement.children].filter(el => el !== wrap);
+      // เอากล่องที่มีเนื้อหามากที่สุด
+      p = siblings.sort((a,b)=> (b.textContent||'').length - (a.textContent||'').length)[0];
+      if (p) return p;
+    }
+    // 2.3 หากหาไม่ได้จริง ๆ ให้สร้างใหม่ (แต่พยายามใช้ของเดิมก่อน)
+    p = document.createElement('aside');
+    p.className = 'right-panel';
+    p.style.cssText = 'background:#fff;border:1px solid #E6EEEC;border-radius:12px;padding:12px;margin-left:12px;min-width:280px;max-width:360px;';
+    document.getElementById('map')?.parentElement?.appendChild(p);
+    return p;
+  }
+
+  /* 3) ฟังก์ชันทำสไลด์ */
+  let _invSlide = 1;
+  function _showSlide(n, track, dots){
+    _invSlide = Math.max(1, Math.min(4, n));
+    track.style.transform = `translateX(${-( _invSlide - 1 ) * 100}%)`;
+    dots.forEach(d=>d.setAttribute('aria-selected', d.dataset.go == _invSlide ? 'true' : 'false'));
+  }
+  function _bindSwipe(frame, track, dots){
+    let sx=0, sy=0, dx=0, dy=0, drag=false;
+    frame.addEventListener('pointerdown', e=>{drag=true; sx=e.clientX; sy=e.clientY; frame.setPointerCapture(e.pointerId);});
+    frame.addEventListener('pointermove', e=>{ if(!drag) return; dx=e.clientX-sx; dy=e.clientY-sy; });
+    frame.addEventListener('pointerup',   ()=>{ if(!drag) return; drag=false;
+      if (Math.abs(dx)>80 && Math.abs(dx)>Math.abs(dy)) _showSlide(_invSlide + (dx>0?-1:1), track, dots);
+      dx=dy=0;
+    });
+    dots.forEach(d=>d.addEventListener('click', ()=>_showSlide(+d.dataset.go, track, dots)));
+  }
+
+  /* 4) แทนที่ renderRightPanel() เดิมให้เป็นสไลด์ 4 หน้า */
+  const prevRender = window.renderRightPanel;
+  window.renderRightPanel = function(){
+    try{
+      const a = (window.INV && window.INV[window.invActive]) || (window.INV && window.INV.sukhumvit) || {kpi:{yield:'—',cap:'—'}};
+      const host = _findRightPanel(); if (!host) return;
+
+      // เขียนทับทั้งหมด
+      host.innerHTML = `
+        <div class="inv-swiper" aria-live="polite">
+          <div class="inv-kpis">
+            <div class="kpi"><small>Yield (ย่าน)</small><b>${a.kpi.yield}%</b></div>
+            <div class="kpi"><small>Cap Rate (ย่าน)</small><b>${a.kpi.cap}%</b></div>
+          </div>
+
+          <div class="inv-frame">
+            <div class="inv-track">
+              <!-- Slide 1: วิธีอ่าน Heat Map -->
+              <section class="inv-slide">
+                <h4>วิธีอ่าน Heat Map</h4>
+                <ul class="inv-facts">
+                  <li>สีเข้ม = ความหนาแน่นกิจกรรมตลาดสูง (ธุรกรรม/ความสนใจ/สต็อกหมุนเวียน)</li>
+                  <li>สีอ่อน = ความหนาแน่นต่ำ</li>
+                  <li>ค้นหา/เลือกย่าน เพื่อซูมไปบริเวณนั้น</li>
+                </ul>
+              </section>
+
+              <!-- Slide 2: Demand & Liquidity -->
+              <section class="inv-slide">
+                <h4>Demand & Liquidity (นิยามสั้น)</h4>
+                <ul class="inv-facts">
+                  <li><b>Take-up Rate</b> = % การขายช่วงเปิดตัว (สูง = ขายไว)</li>
+                  <li><b>Absorption</b> = ยูนิตขายออกในแต่ละช่วงเวลา</li>
+                  <li><b>Overhang</b> = ยูนิตคงค้างสะสม (ต่ำ = ตลาดระบายได้ดี)</li>
+                </ul>
+              </section>
+
+              <!-- Slide 3: Supply & Rental -->
+              <section class="inv-slide">
+                <h4>Supply & Rental</h4>
+                <ul class="inv-facts">
+                  <li><b>New Projects</b> สะท้อนความมั่นใจผู้พัฒนา/เม็ดเงินลงทุน</li>
+                  <li><b>Yield vs Cap Rate</b> ใช้เทียบผลตอบแทนขั้นต้น/หลังค่าใช้จ่าย</li>
+                </ul>
+              </section>
+
+              <!-- Slide 4: Price Metrics -->
+              <section class="inv-slide">
+                <h4>Price Metrics (10 ปี)</h4>
+                <ul class="inv-facts">
+                  <li><b>Launch</b> = ราคาขายตอนเปิดตัวโครงการใหม่</li>
+                  <li><b>Resale</b> = ราคาซื้อขายมือสอง</li>
+                  <li><b>Treasury</b> = ราคาประเมิน (baseline) สำหรับเทียบระยะยาว</li>
+                </ul>
+              </section>
+            </div>
+          </div>
+
+          <div class="inv-dots" role="tablist" aria-label="Investor pages">
+            <button class="dot" data-go="1" aria-selected="true"></button>
+            <button class="dot" data-go="2"></button>
+            <button class="dot" data-go="3"></button>
+            <button class="dot" data-go="4"></button>
+          </div>
+        </div>
+      `;
+
+      // bind สไลด์
+      const frame = host.querySelector('.inv-frame');
+      const track = host.querySelector('.inv-track');
+      const dots  = [...host.querySelectorAll('.inv-dots .dot')];
+      _showSlide(1, track, dots);
+      _bindSwipe(frame, track, dots);
+    }catch(e){
+      // ถ้าอยาก fallback ไป logic เดิม (ถ้ามี) ก็เรียกต่อได้
+      if (typeof prevRender === 'function') try{ prevRender(); }catch(_){}
+    }
+  };
+
+  // เรียกซ้ำหนึ่งครั้ง เผื่อคุณเปิดหน้าอยู่แล้ว
+  try { window.renderRightPanel(); } catch(e){}
+})();
+</script>
 </body>
 </html>
