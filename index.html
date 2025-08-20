@@ -532,6 +532,154 @@ document.addEventListener('DOMContentLoaded', ()=>{
 })();
 </script>
 <!-- ===== /Investor Lens (Swipe) — ONE-FILE PACK ===== -->
+  <!-- ===== Investor Lens (Overlay Mode: replace main map + right panel) ===== -->
+<script>
+(() => {
+  /* 0) Loader: Leaflet Heat (ใช้แผนที่เดิม #map) */
+  function loadScriptOnce(src, test, cb){ if(test()) return cb&&cb(); const s=document.createElement('script'); s.src=src; s.defer=true; s.onload=cb||(()=>{}); document.head.appendChild(s); }
+  loadScriptOnce('https://unpkg.com/leaflet.heat/dist/leaflet-heat.js', ()=>window.L && L.heatLayer);
+
+  /* 1) Demo data (ต่อกับ JSON จริงได้ทีหลัง) */
+  const INV = {
+    sukhumvit:{ center:[13.7336,100.5760],
+      heat:[[13.732,100.572,0.9],[13.735,100.581,0.8],[13.728,100.583,0.7],[13.739,100.575,0.65]],
+      kpi:{yield:5.6,cap:4.2}
+    }
+  };
+  ['ekkamai','thonglor','phromphong','onnut','ratchada'].forEach(k=>{
+    INV[k]=JSON.parse(JSON.stringify(INV.sukhumvit));
+    INV[k].kpi={yield:+(5.1+Math.random()*0.8).toFixed(1),cap:+(3.7+Math.random()*0.6).toFixed(1)};
+  });
+
+  /* 2) State */
+  let invActive='sukhumvit';
+  let invHeat=null, baseMap=null;
+
+  /* 3) หา/สร้าง side panel ฝั่งขวา */
+  function getRightPanel(){
+    // พยายามหา panel เดิมก่อน
+    let p = document.querySelector('#infoPanel, .details, .right-panel, .sidebar, [data-role="right-panel"]');
+    if (p) return p;
+    // ถ้าไม่มี สร้างกล่องใหม่ข้างแผนที่
+    const map = document.getElementById('map');
+    if (!map) return null;
+    const wrap = map.parentElement;
+    p = document.createElement('aside');
+    p.className = 'right-panel';
+    p.style.cssText = 'background:#fff;border:1px solid #E6EEEC;border-radius:12px;padding:12px;margin-left:12px;min-width:280px;max-width:360px;';
+    wrap?.appendChild(p);
+    return p;
+  }
+
+  /* 4) อัปเดตข้อความอธิบายทางขวา */
+  function renderRightPanel(){
+    const a = INV[invActive];
+    const p = getRightPanel(); if (!p) return;
+    p.innerHTML = `
+      <h3 style="margin:0 0 8px 0;">นักลงทุน • ภาพรวมย่าน</h3>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <div style="flex:1;border:1px solid #E6EEEC;border-radius:12px;padding:10px;">
+          <small style="color:#6A7D80;">Yield (ย่าน)</small><div style="font-weight:700;font-size:20px;color:#0E3F38">${a.kpi.yield}%</div>
+        </div>
+        <div style="flex:1;border:1px solid #E6EEEC;border-radius:12px;padding:10px;">
+          <small style="color:#6A7D80;">Cap Rate (ย่าน)</small><div style="font-weight:700;font-size:20px;color:#0E3F38">${a.kpi.cap}%</div>
+        </div>
+      </div>
+      <h4 style="margin:10px 0 6px 0;">วิธีอ่าน Heat Map</h4>
+      <ul style="margin:0 0 10px 18px;padding:0;line-height:1.6;">
+        <li>สีเข้ม = ความหนาแน่นกิจกรรมตลาดสูง (ธุรกรรม/ความสนใจ/สต็อกหมุนเวียน)</li>
+        <li>สีอ่อน = ความหนาแน่นต่ำ</li>
+        <li>ซูม/ค้นหาย่านเพื่อดูบริบทพื้นที่เฉพาะ</li>
+      </ul>
+      <div style="font-size:12px;color:#6A7D80;">แหล่งข้อมูล: internal + OSM (เพื่อสาธิต)</div>
+    `;
+  }
+
+  /* 5) วาง Heat Map ทับแผนที่เดิม (#map) + ช่องค้นหา */
+  function ensureSearchControl(){
+    if (document.getElementById('invSearchCtl')) return;
+    const ctl = document.createElement('div');
+    ctl.id = 'invSearchCtl';
+    ctl.style.cssText = 'position:absolute;z-index:800;background:#fff;border:1px solid #E6EEEC;border-radius:999px;padding:6px;display:flex;gap:6px;align-items:center;box-shadow:0 6px 14px rgba(0,0,0,.08)';
+    ctl.innerHTML = `
+      <input id="invAreaInput" placeholder="ค้นหาย่าน เช่น Sukhumvit" style="border:0;outline:none;padding:6px 8px;width:220px;border-radius:999px;font-weight:700;color:#0E3F38"/>
+      <button id="invApplyArea" style="background:#1F6F63;color:#fff;border:0;border-radius:999px;padding:6px 10px;font-weight:700;cursor:pointer;">เลือก</button>
+    `;
+    // ติดบนมุมซ้ายบนของ #map container
+    const mapEl = document.getElementById('map');
+    mapEl.style.position = 'relative';
+    ctl.style.top = '10px'; ctl.style.left = '10px';
+    mapEl.appendChild(ctl);
+
+    document.getElementById('invApplyArea').addEventListener('click', ()=>{
+      const v = (document.getElementById('invAreaInput').value||'Sukhumvit').toLowerCase();
+      const key = v.startsWith('suk')?'sukhumvit':v.startsWith('ekk')?'ekkamai':v.startsWith('tho')?'thonglor':
+                  v.startsWith('phr')?'phromphong':v.startsWith('on')?'onnut':v.startsWith('rat')?'ratchada':'sukhumvit';
+      setArea(key);
+    });
+  }
+
+  function setArea(key){
+    invActive = key;
+    const a = INV[key];
+    if (baseMap) baseMap.setView(a.center, 13);
+    if (invHeat) invHeat.setLatLngs(a.heat);
+    renderRightPanel();
+  }
+
+  function initInvestorOverlay(){
+    const mapEl = document.getElementById('map');
+    if (!mapEl) return;
+
+    // ใช้ Leaflet instance เดิมถ้ามี
+    baseMap = mapEl._leaflet_id ? mapEl._leaflet_map : null;
+    if (!baseMap && window.L) {
+      baseMap = L.map(mapEl, { zoomControl: true });
+      mapEl._leaflet_map = baseMap; // เก็บ reference
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(baseMap);
+    }
+
+    if (!window.L || !L.heatLayer) {
+      // รอ script โหลด
+      return setTimeout(initInvestorOverlay, 100);
+    }
+
+    // set view และวาง heat
+    baseMap.setView(INV[invActive].center, 13);
+    if (invHeat) { baseMap.removeLayer(invHeat); invHeat=null; }
+    invHeat = L.heatLayer(INV[invActive].heat, { radius: 22, blur: 16, maxZoom: 17 }).addTo(baseMap);
+
+    ensureSearchControl();
+    renderRightPanel();
+  }
+
+  /* 6) Hook เข้ากับ applyLens เดิม */
+  const prevApplyLens = window.applyLens;
+  window.applyLens = function(lens){
+    if (typeof prevApplyLens === 'function') { try { prevApplyLens(lens); } catch(e){} }
+    if (lens === 'investor') {
+      try { localStorage.setItem('pd_lens','investor'); } catch(e){}
+      initInvestorOverlay();
+    }
+  };
+
+  /* 7) Bind ปุ่ม “นักลงทุน” ให้เปิดโหมด overlay */
+  document.addEventListener('DOMContentLoaded', ()=>{
+    // ปุ่มที่เขียนว่า "นักลงทุน"
+    const btn = [...document.querySelectorAll('a,button,[role="button"],.chip,.tab')]
+      .find(el => /นักลงทุน/.test((el.textContent||'').trim()));
+    btn?.addEventListener('click', (e)=>{ e.preventDefault(); window.applyLens('investor'); }, {capture:true});
+
+    // เปิดอัตโนมัติถ้า URL ระบุ
+    const p = new URLSearchParams(location.search);
+    if (p.get('lens') === 'investor') window.applyLens('investor');
+
+    // ต่อเนื่องจาก session เดิม
+    try { if (localStorage.getItem('pd_lens') === 'investor') window.applyLens('investor'); } catch(e){}
+  });
+})();
+</script>
+<!-- ===== /Investor Lens (Overlay Mode) ===== -->
   
 </body>
 </html>
