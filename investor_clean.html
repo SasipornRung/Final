@@ -30,15 +30,16 @@
     .searchCtl input{border:0;outline:none;padding:6px 8px;width:240px;border-radius:999px;font-weight:700;color:var(--green-700)}
     .btn{background:var(--green);color:#fff;border:0;border-radius:999px;padding:8px 12px;font-weight:800;cursor:pointer}
 
-    /* ปล่อยคลิกทะลุ Canvas ของ Heat */
+    /* ===== สำคัญ: ให้ป้ายย่านคลิกได้ชัวร์ ===== */
+    .leaflet-marker-pane{ z-index:650 !important; }     /* marker อยู่เหนือ heat */
+    .leaflet-overlay-pane{ z-index:600 !important; }    /* heat/canvas ชั้นล่างกว่า */
     .leaflet-heatmap-layer,
-    .leaflet-overlay-pane canvas { pointer-events: none; }
-
-    /* Marker/ปุ่มย่านบนแผนที่ */
+    .leaflet-overlay-pane canvas { pointer-events:none; } /* ปล่อยคลิกทะลุ heat */
+    .area-dot, .area-dot * { pointer-events:auto; }       /* ให้ divIcon รับคลิกทั้งกล่อง */
     .area-dot span{
       background:#fff;border:1px solid #E6EEEC;border-radius:999px;
       padding:4px 8px;font-weight:800;color:#0E3F38;white-space:nowrap;
-      box-shadow:0 2px 8px rgba(0,0,0,.10)
+      display:inline-block; box-shadow:0 2px 8px rgba(0,0,0,.10)
     }
 
     /* Right panel */
@@ -66,7 +67,6 @@
 <body>
   <header><div class="badge">PD</div><h1>Investor Lens • Heat + KPI + Slides</h1></header>
 
-  <!-- Diagnostic status (ซ่อนอัตโนมัติเมื่อ DEBUG=false) -->
   <div class="diag">
     <span>STATUS:</span>
     <span id="sLeaflet" class="pill bad">Leaflet ❌</span>
@@ -88,7 +88,6 @@
 
         <div class="frame">
           <div class="track" id="track">
-            <!-- Slide 1 -->
             <section class="slide">
               <h3>วิธีอ่าน Heat Map</h3>
               <ul class="facts">
@@ -97,7 +96,6 @@
                 <li>ค้นหาย่าน แล้วกด “เลือก” แผนที่จะซูมไปย่านนั้น</li>
               </ul>
             </section>
-            <!-- Slide 2 -->
             <section class="slide">
               <h3>Demand & Liquidity</h3>
               <ul class="facts">
@@ -106,7 +104,6 @@
                 <li><b>Overhang</b> = ยูนิตเหลือขาย</li>
               </ul>
             </section>
-            <!-- Slide 3 -->
             <section class="slide">
               <h3>Supply & Rental</h3>
               <ul class="facts">
@@ -114,7 +111,6 @@
                 <li><b>Yield vs Cap</b> = ผลตอบแทนขั้นต้น เทียบ Cap Rate สุทธิ</li>
               </ul>
             </section>
-            <!-- Slide 4 -->
             <section class="slide">
               <h3>Price Metrics (10 ปี)</h3>
               <ul class="facts">
@@ -140,19 +136,13 @@
   <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 
   <script>
-    /* =========================
-       CONFIG & SAMPLE DATA
-    ==========================*/
-    const DEBUG = false; // true = โชว์กล่อง STATUS, false = ซ่อน
+    /* ===== CONFIG & DATA ===== */
+    const DEBUG = false;
 
     const INV = {
       sukhumvit:{
         center:[13.736,100.576],
-        heat:[
-          [13.736,100.576,1.0],[13.740,100.580,0.95],[13.730,100.572,0.9],
-          [13.734,100.585,0.85],[13.741,100.569,0.8],[13.728,100.579,0.8],
-          [13.738,100.573,0.75],[13.732,100.570,0.75]
-        ],
+        heat:[[13.736,100.576,1.0],[13.740,100.580,0.95],[13.730,100.572,0.9],[13.734,100.585,0.85],[13.741,100.569,0.8],[13.728,100.579,0.8],[13.738,100.573,0.75],[13.732,100.570,0.75]],
         kpi:{yield:5.6, cap:4.2}
       },
       ekkamai:{
@@ -171,11 +161,11 @@
         kpi:{yield:5.0, cap:3.7}
       }
     };
+    const LABEL = { sukhumvit:'Sukhumvit', ekkamai:'Ekkamai', thonglor:'Thonglor', rama9:'Rama 9' };
+
     let active='sukhumvit', map, heatLayer;
 
-    /* =========================
-       HELPERS
-    ==========================*/
+    /* ===== HELPERS ===== */
     function setKPI(){
       const a = INV[active] || INV.sukhumvit;
       document.getElementById('kpiYield').textContent = a.kpi.yield + '%';
@@ -205,13 +195,12 @@
 
       goBtn.addEventListener('click', apply);
       input.addEventListener('keydown', (e)=>{ if (e.key==='Enter') apply(); });
+      // ไม่ให้กล่องนี้ขวางการลาก/ซูม
+      L.DomEvent.disableClickPropagation(ctl);
+      L.DomEvent.disableScrollPropagation(ctl);
     }
 
-    /* =========================
-       เลือกย่านจากคลิก/ปุ่มบนแผนที่
-    ==========================*/
-    const LABEL = { sukhumvit:'Sukhumvit', ekkamai:'Ekkamai', thonglor:'Thonglor', rama9:'Rama 9' };
-
+    /* ===== เลือกย่าน / ป้ายย่าน ===== */
     function selectArea(key){
       if (!INV[key]) return;
       active = key;
@@ -230,42 +219,52 @@
       return {key:best, dist};
     }
 
+    // ✅ เวอร์ชันใหม่: hit-box เต็มขนาด คลิกได้แน่นอน
     function addAreaMarkers(){
       for (const [k,v] of Object.entries(INV)){
-        L.marker(v.center, {
-          icon: L.divIcon({ className:'area-dot', html:`<span>${LABEL[k]||k}</span>` })
-        }).addTo(map).on('click', ()=>selectArea(k));
+        const icon = L.divIcon({
+          className:'area-dot',
+          html:`<span>${LABEL[k]||k}</span>`,
+          iconSize:null,             // ให้ขนาดตามเนื้อหา (ไม่ล็อค 12x12)
+          iconAnchor:[0,0]           // มุมซ้ายบน (คลิกได้ทั้งกล่อง)
+        });
+
+        const m = L.marker(v.center, {
+          icon,
+          interactive:true,
+          keyboard:true,
+          riseOnHover:true
+        }).addTo(map);
+
+        m.on('add', () => {
+          const el = m.getElement();
+          if (el) el.style.pointerEvents = 'auto';
+        });
+
+        m.on('click', () => selectArea(k));
       }
     }
 
-    /* =========================
-       MAP
-    ==========================*/
+    /* ===== MAP ===== */
     function initMap(){
       const sLeaf = document.getElementById('sLeaflet');
       const sHeat = document.getElementById('sHeat');
       const sMap  = document.getElementById('sMap');
-
       if (window.L && typeof L.map==='function') sLeaf.className='pill ok';
       if (window.L && L.heatLayer)              sHeat.className='pill ok';
 
       // reset ถ้ามี instance เดิม
       const el=document.getElementById('map');
       if (el._leaflet_id){
-        const p=el.parentNode, n=el.cloneNode(false);
-        n.id='map'; p.replaceChild(n,el);
+        const p=el.parentNode, n=el.cloneNode(false); n.id='map'; p.replaceChild(n,el);
       }
 
       map = L.map('map',{zoomControl:true});
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
 
-      // เปิด gesture ทั้งหมด
-      map.dragging.enable();
-      map.scrollWheelZoom.enable();
-      map.touchZoom.enable();
-      map.doubleClickZoom.enable();
-      map.boxZoom.enable();
-      map.keyboard.enable();
+      // เปิด gesture
+      map.dragging.enable(); map.scrollWheelZoom.enable(); map.touchZoom.enable();
+      map.doubleClickZoom.enable(); map.boxZoom.enable(); map.keyboard.enable();
 
       map.setView(INV[active].center, 14);
 
@@ -276,24 +275,18 @@
 
       sMap.className='pill ok';
 
-      // ใส่ปุ่มย่านและคลิกเลือกย่านบนแผนที่
+      // ป้ายย่าน + คลิกบนแผนที่เพื่อเลือกย่านที่ใกล้ที่สุด
       addAreaMarkers();
       map.on('click', (e)=>{
         const {key, dist} = nearestArea(e.latlng);
         if (key && dist < 1500) selectArea(key);   // 1.5 กม.
       });
 
-      // ไม่ให้กล่องค้นหาขวางการลาก/ซูม
       ensureSearchCtl();
-      const ctl = document.querySelector('.searchCtl');
-      if (ctl){ L.DomEvent.disableClickPropagation(ctl); L.DomEvent.disableScrollPropagation(ctl); }
-
       setKPI();
     }
 
-    /* =========================
-       SLIDES (ปัด/คลิกดอท)
-    ==========================*/
+    /* ===== SLIDES ===== */
     function initSlides(){
       const track=document.getElementById('track');
       const dots=[...document.querySelectorAll('.dot')];
@@ -311,9 +304,7 @@
       show(1);
     }
 
-    /* =========================
-       BOOT
-    ==========================*/
+    /* ===== BOOT ===== */
     window.addEventListener('load', ()=>{
       if (!DEBUG) document.querySelector('.diag').style.display='none';
       initSlides();
@@ -327,14 +318,10 @@
       }
     });
 
-    // แสดง error ในกล่อง STATUS (ถ้าเปิด DEBUG)
     window.addEventListener('error', e=>{
       if (!DEBUG) return;
-      const b=document.querySelector('.diag');
-      const div=document.createElement('div');
-      div.textContent='JS Error: '+e.message;
-      div.style.color='#A13232';
-      b.appendChild(div);
+      const b=document.querySelector('.diag'); const div=document.createElement('div');
+      div.textContent='JS Error: '+e.message; div.style.color='#A13232'; b.appendChild(div);
     });
   </script>
 </body>
