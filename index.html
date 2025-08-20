@@ -299,247 +299,18 @@ window.addEventListener('load', () => {
   applyLens(localStorage.getItem('pd_lens') || 'tenant');
 });
 </script>
-  <!-- ===== Investor Lens (Swipe) — ONE-FILE PACK (paste before </body>) ===== -->
+  <!-- ===== Investor Overlay (replace main map + right panel) ===== -->
 <script>
 (() => {
-/* ---------- Loader: Leaflet + Heat + Chart ---------- */
-function loadScriptOnce(src, test, cb){ if(test()) return cb&&cb(); const s=document.createElement('script'); s.src=src; s.defer=true; s.onload=cb||(()=>{}); document.head.appendChild(s); }
-function loadCssOnce(href){ if([...document.styleSheets].some(ss=>ss.href&&ss.href.includes(href))) return; const l=document.createElement('link'); l.rel='stylesheet'; l.href=href; document.head.appendChild(l); }
-loadCssOnce('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
-loadScriptOnce('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', ()=>!!window.L);
-loadScriptOnce('https://unpkg.com/leaflet.heat/dist/leaflet-heat.js', ()=>!!(window.L&&L.heatLayer));
-loadScriptOnce('https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js', ()=>!!window.Chart);
-
-/* ---------- CSS ---------- */
-const css = `
-:root{--teal:#1F6F63;--teal-700:#0E3F38;--muted:#6A7D80;--card:#fff;--border:#E6EEEC;--shadow:0 10px 24px rgba(12,35,31,.12)}
-#investorSwipe.inv-hidden{display:none!important}
-#investorSwipe{position:relative;background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:12px;margin-top:16px}
-#investorSwipe .inv-slide{display:grid;grid-template-columns:2fr 1fr;gap:12px;min-height:420px}
-#investorSwipe .inv-left,#investorSwipe .inv-right{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px}
-#investorSwipe .inv-grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-#investorSwipe .inv-kpis{display:flex;gap:10px;margin-bottom:8px}
-#investorSwipe .kpi{flex:1;background:#fff;border:1px solid var(--border);border-radius:12px;padding:10px}
-#investorSwipe .kpi small{color:var(--muted)} #investorSwipe .kpi b{font-size:22px;color:var(--teal-700)}
-#investorSwipe .inv-map{height:280px;border-radius:12px;overflow:hidden}
-#investorSwipe .hint{color:var(--muted);font-size:13px;margin:2px 0 8px}
-#investorSwipe .inv-search{display:flex;gap:8px;margin-bottom:8px}
-#investorSwipe .inv-search input{flex:1;padding:10px 12px;border-radius:999px;border:2px solid var(--teal);font-weight:700}
-#investorSwipe .inv-search button{padding:10px 14px;border-radius:999px;background:var(--teal);border:0;color:#fff;font-weight:700;cursor:pointer}
-#investorSwipe .inv-facts{margin:8px 0 0 16px;padding:0} #investorSwipe .inv-facts li{margin:6px 0}
-#investorSwipe .inv-pager{display:flex;justify-content:center;gap:8px;margin-top:10px}
-#investorSwipe .inv-pager .dot{width:24px;height:6px;border-radius:999px;border:0;background:#E0E7E4;cursor:pointer}
-#investorSwipe .inv-pager .dot[aria-selected="true"]{background:var(--teal)}
-@media(max-width:900px){#investorSwipe .inv-slide{grid-template-columns:1fr}}
-`;
-const style = document.createElement('style'); style.textContent = css; document.head.appendChild(style);
-
-/* ---------- HTML (append after #map if present) ---------- */
-const html = `
-<section id="investorSwipe" class="inv-hidden" aria-live="polite">
-  <!-- Slide 1 -->
-  <article class="inv-slide" data-slide="1">
-    <div class="inv-left">
-      <div class="inv-kpis">
-        <div class="kpi"><small>Yield (ย่าน)</small><b id="invYield">—</b></div>
-        <div class="kpi"><small>Cap Rate (ย่าน)</small><b id="invCap">—</b></div>
-      </div>
-      <div class="inv-search">
-        <input id="invAreaInput" list="invAreaList" placeholder="ค้นหาย่าน เช่น Sukhumvit, Thonglor…" />
-        <button id="invApplyArea">เลือก</button>
-        <datalist id="invAreaList">
-          <option value="Sukhumvit"><option value="Ekkamai"><option value="Thonglor">
-          <option value="Phrom Phong"><option value="On Nut"><option value="Ratchada">
-        </datalist>
-      </div>
-      <div id="invMiniMap" class="inv-map" aria-label="Heat Map"></div>
-    </div>
-    <aside class="inv-right">
-      <h3>วิธีอ่าน Heat Map</h3>
-      <ul class="inv-facts">
-        <li>สีเข้ม = ความหนาแน่นกิจกรรมตลาดสูง</li>
-        <li>สีอ่อน = ความหนาแน่นต่ำ</li>
-        <li>ค้นหาย่านเพื่อซูมไปตำแหน่งนั้น</li>
-      </ul>
-    </aside>
-  </article>
-
-  <!-- Slide 2 -->
-  <article class="inv-slide" data-slide="2" style="display:none">
-    <div class="inv-left">
-      <div class="inv-grid2">
-        <div><div class="hint">Take-up Rate (10Y)</div><canvas id="invTakeup"></canvas></div>
-        <div><div class="hint">Absorption Units</div><canvas id="invAbsorb"></canvas></div>
-      </div>
-    </div>
-    <aside class="inv-right">
-      <h3>คำอธิบาย</h3>
-      <ul class="inv-facts">
-        <li><b>Take-up Rate</b> อัตราการขายเมื่อเปิดตัว</li>
-        <li><b>Absorption</b> ยูนิตที่ขายออกจริงในช่วงเวลา</li>
-        <li><b>Overhang</b> ยูนิตเหลือขายสะสม</li>
-      </ul>
-    </aside>
-  </article>
-
-  <!-- Slide 3 -->
-  <article class="inv-slide" data-slide="3" style="display:none">
-    <div class="inv-left">
-      <div class="inv-grid2">
-        <div><div class="hint">New Projects</div><canvas id="invNewProj"></canvas></div>
-        <div><div class="hint">Yield vs Cap Rate</div><canvas id="invRental"></canvas></div>
-      </div>
-    </div>
-    <aside class="inv-right">
-      <h3>เกร็ดสั้น</h3>
-      <ul class="inv-facts">
-        <li><b>New Projects</b> สะท้อนความมั่นใจของผู้พัฒนา</li>
-        <li><b>Yield</b> ผลตอบแทนค่าเช่า</li>
-        <li><b>Cap Rate</b> ผลตอบแทนสุทธิหลังค่าใช้จ่าย</li>
-      </ul>
-    </aside>
-  </article>
-
-  <!-- Slide 4 -->
-  <article class="inv-slide" data-slide="4" style="display:none">
-    <div class="inv-left">
-      <div class="hint">Launch vs Resale vs Treasury (10Y)</div>
-      <canvas id="invPrice3"></canvas>
-    </div>
-    <aside class="inv-right">
-      <h3>การแปลความ</h3>
-      <ul class="inv-facts">
-        <li><b>Launch</b> = ราคาตั้งขายโครงการใหม่</li>
-        <li><b>Resale</b> = ราคาตลาดมือสอง</li>
-        <li><b>Treasury</b> = ราคาประเมินราชการ (baseline)</li>
-      </ul>
-    </aside>
-  </article>
-
-  <div class="inv-pager" role="tablist" aria-label="Pages">
-    <button class="dot" data-go="1" aria-selected="true"></button>
-    <button class="dot" data-go="2"></button>
-    <button class="dot" data-go="3"></button>
-    <button class="dot" data-go="4"></button>
-  </div>
-</section>
-`;
-const anchor = document.querySelector('#map') || document.body;
-anchor.insertAdjacentHTML('afterend', html);
-
-/* ---------- Demo data (ต่อกับ JSON จริงทีหลังได้) ---------- */
-const INV = {
-  sukhumvit:{ center:[13.7336,100.5760],
-    heat:[[13.732,100.572,0.9],[13.735,100.581,0.8],[13.728,100.583,0.7],[13.739,100.575,0.65]],
-    kpi:{yield:5.6,cap:4.2},
-    rental:{ years:[2019,2020,2021,2022,2023,2024], y:[4.3,4.1,4.6,4.9,5.2,5.6], c:[3.8,3.6,3.7,3.9,4.0,4.2] },
-    takeup:{ years:Array.from({length:10},(_,i)=>2015+i), rate:[64,62,65,66,69,71,68,72,74,76] },
-    absorb:[320,380,420,450,520,610,680,720,650,600],
-    supply:{ years:Array.from({length:10},(_,i)=>2015+i), newProj:[5,8,6,10,13,7,4,6,9,11] },
-    price:{ years:Array.from({length:10},(_,i)=>2015+i), launch:[110,112,114,117,120,124,126,129,134,139],
-            resale:[95,98,102,107,112,118,125,131,138,145], treasury:[80,82,84,86,88,92,95,98,101,104] }
+  /* 0) โหลด Leaflet Heat (ธรรมดามีอยู่แล้วคือ Leaflet) */
+  function loadScriptOnce(src, test, cb){
+    if (test()) return cb && cb();
+    const s=document.createElement('script'); s.src=src; s.defer=true; s.onload=cb||(()=>{});
+    document.head.appendChild(s);
   }
-};
-['ekkamai','thonglor','phromphong','onnut','ratchada'].forEach(k=>{
-  INV[k]=JSON.parse(JSON.stringify(INV.sukhumvit));
-  INV[k].kpi={yield:+(5.1+Math.random()*0.8).toFixed(1), cap:+(3.7+Math.random()*0.6).toFixed(1)};
-});
-
-/* ---------- Logic: map + charts + swipe + open ---------- */
-let invActive='sukhumvit', invMiniMap, invHeat, invCharts={}, invSlide=1;
-
-function invInitMap(){
-  if (!window.L) return setTimeout(invInitMap, 60);
-  const el = document.getElementById('invMiniMap'); if (!el) return;
-  invMiniMap = L.map(el,{zoomControl:false,attributionControl:false,scrollWheelZoom:false});
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(invMiniMap);
-  invMiniMap.setView(INV[invActive].center,13);
-  invHeat = L.heatLayer(INV[invActive].heat,{radius:22,blur:16,maxZoom:17}).addTo(invMiniMap);
-}
-function invSetArea(key){
-  invActive = key;
-  const a = INV[key];
-  const yEl=document.getElementById('invYield'), cEl=document.getElementById('invCap');
-  if (yEl) yEl.textContent = a.kpi.yield + '%';
-  if (cEl) cEl.textContent   = a.kpi.cap + '%';
-  if (invMiniMap){ invMiniMap.setView(a.center,13); invHeat.setLatLngs(a.heat); }
-  invRenderSlide(invSlide);
-}
-function invMk(id,cfg){ if(!window.Chart) return setTimeout(()=>invMk(id,cfg),60); if(invCharts[id]) invCharts[id].destroy(); const el=document.getElementById(id); if(!el) return; invCharts[id]=new Chart(el,cfg); }
-function invRenderSlide(s){
-  const a=INV[invActive];
-  if(s===2){
-    invMk('invTakeup',{type:'line',data:{labels:a.takeup.years,datasets:[{data:a.takeup.rate,tension:.35}]},options:{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'%'}}}}});
-    invMk('invAbsorb',{type:'bar',data:{labels:a.takeup.years,datasets:[{data:a.absorb}]} ,options:{plugins:{legend:{display:false}}}});
-  }else if(s===3){
-    invMk('invNewProj',{type:'bar',data:{labels:a.supply.years,datasets:[{data:a.supply.newProj}]},options:{plugins:{legend:{display:false}}}});
-    invMk('invRental',{type:'bar',data:{labels:a.rental.years,datasets:[{label:'Yield',data:a.rental.y},{label:'Cap',data:a.rental.c}]} ,options:{plugins:{legend:{position:'bottom'}},scales:{y:{ticks:{callback:v=>v+'%'}}}}});
-  }else if(s===4){
-    invMk('invPrice3',{type:'line',data:{labels:a.price.years,datasets:[{label:'Launch',data:a.price.launch,tension:.35},{label:'Resale',data:a.price.resale,tension:.35},{label:'Treasury',data:a.price.treasury,tension:.35}]},options:{plugins:{legend:{position:'bottom'}}}});
-  }
-}
-function invShowSlide(n){
-  invSlide=Math.max(1,Math.min(4,n));
-  document.querySelectorAll('#investorSwipe .inv-slide').forEach(sl=>sl.style.display=(+sl.dataset.slide===invSlide)?'grid':'none');
-  document.querySelectorAll('#investorSwipe .dot').forEach(d=>d.setAttribute('aria-selected', d.dataset.go==invSlide?'true':'false'));
-  invRenderSlide(invSlide);
-}
-function invBindPagerAndSwipe(){
-  document.querySelectorAll('#investorSwipe .dot').forEach(d=>d.addEventListener('click',()=>invShowSlide(+d.dataset.go)));
-  const box=document.getElementById('investorSwipe'); let sx=0,sy=0,dx=0,dy=0,drag=false;
-  box.addEventListener('pointerdown',e=>{drag=true;sx=e.clientX;sy=e.clientY;box.setPointerCapture(e.pointerId);});
-  box.addEventListener('pointermove',e=>{if(!drag)return;dx=e.clientX-sx;dy=e.clientY-sy;});
-  box.addEventListener('pointerup',()=>{if(!drag)return;drag=false; if(Math.abs(dx)>80 && Math.abs(dx)>Math.abs(dy)) invShowSlide(invSlide+(dx>0?-1:1)); dx=dy=0;});
-}
-
-/* เปิดเลนส์นักลงทุน (ไม่พึ่งโค้ดเดิม) */
-function openInvestor(){
-  try{localStorage.setItem('pd_lens','investor');}catch(e){}
-  document.getElementById('investorSwipe')?.classList.remove('inv-hidden');
-  const mainMap=document.getElementById('map'); if(mainMap) mainMap.style.display='none';
-  if(!invMiniMap) invInitMap();
-  invSetArea(invActive);
-  invBindPagerAndSwipe();
-  invShowSlide(1);
-  document.getElementById('investorSwipe').scrollIntoView({behavior:'smooth',block:'start'});
-}
-window.openInvestor = openInvestor; // ไว้เทสใน console
-
-/* Bind ปุ่ม "นักลงทุน" + Auto-open ด้วย ?lens=investor */
-document.addEventListener('DOMContentLoaded', ()=>{
-  const where = document.querySelector('#map') || document.body;
-  // ensure section exists (already inserted above)
-  // bind area chooser
-  document.getElementById('invApplyArea')?.addEventListener('click', ()=>{
-    const v=(document.getElementById('invAreaInput').value||'Sukhumvit').toLowerCase();
-    const key = v.startsWith('suk')?'sukhumvit':v.startsWith('ekk')?'ekkamai':v.startsWith('tho')?'thonglor':
-                v.startsWith('phr')?'phromphong':v.startsWith('on')?'onnut':v.startsWith('rat')?'ratchada':'sukhumvit';
-    invSetArea(key);
-  });
-
-  // bind any element contains "นักลงทุน"
-  const targets=[...document.querySelectorAll('a,button,[role="button"],.chip,.tab,.btn,.badge')]
-    .filter(el=>/นักลงทุน/.test((el.textContent||'').trim()));
-  targets.forEach(el=>{
-    el.addEventListener('click', (e)=>{ e.preventDefault(); e.stopImmediatePropagation(); openInvestor(); }, {capture:true});
-    el.removeAttribute?.('href');
-  });
-
-  const p=new URLSearchParams(location.search);
-  if (p.get('lens')==='investor') openInvestor();
-  try{ if(localStorage.getItem('pd_lens')==='investor') openInvestor(); }catch(e){}
-});
-})();
-</script>
-<!-- ===== /Investor Lens (Swipe) — ONE-FILE PACK ===== -->
-  <!-- ===== Investor Lens (Overlay Mode: replace main map + right panel) ===== -->
-<script>
-(() => {
-  /* 0) Loader: Leaflet Heat (ใช้แผนที่เดิม #map) */
-  function loadScriptOnce(src, test, cb){ if(test()) return cb&&cb(); const s=document.createElement('script'); s.src=src; s.defer=true; s.onload=cb||(()=>{}); document.head.appendChild(s); }
   loadScriptOnce('https://unpkg.com/leaflet.heat/dist/leaflet-heat.js', ()=>window.L && L.heatLayer);
 
-  /* 1) Demo data (ต่อกับ JSON จริงได้ทีหลัง) */
+  /* 1) ข้อมูลตัวอย่าง (ต่อกับ JSON จริงทีหลังได้) */
   const INV = {
     sukhumvit:{ center:[13.7336,100.5760],
       heat:[[13.732,100.572,0.9],[13.735,100.581,0.8],[13.728,100.583,0.7],[13.739,100.575,0.65]],
@@ -551,16 +322,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
     INV[k].kpi={yield:+(5.1+Math.random()*0.8).toFixed(1),cap:+(3.7+Math.random()*0.6).toFixed(1)};
   });
 
-  /* 2) State */
+  /* 2) state */
   let invActive='sukhumvit';
-  let invHeat=null, baseMap=null;
+  let heatLayer=null;
 
-  /* 3) หา/สร้าง side panel ฝั่งขวา */
+  /* 3) หา/สร้างกล่องฝั่งขวา แล้วใช้แทนของเดิม */
   function getRightPanel(){
     // พยายามหา panel เดิมก่อน
     let p = document.querySelector('#infoPanel, .details, .right-panel, .sidebar, [data-role="right-panel"]');
     if (p) return p;
-    // ถ้าไม่มี สร้างกล่องใหม่ข้างแผนที่
+    // ถ้าไม่มีก็สร้างใหม่ไว้ข้าง #map
     const map = document.getElementById('map');
     if (!map) return null;
     const wrap = map.parentElement;
@@ -571,89 +342,96 @@ document.addEventListener('DOMContentLoaded', ()=>{
     return p;
   }
 
-  /* 4) อัปเดตข้อความอธิบายทางขวา */
+  /* 4) เขียนคำอธิบายฝั่งขวา (แทนของเดิม) */
   function renderRightPanel(){
-    const a = INV[invActive];
+    const a = INV[invActive] || INV.sukhumvit;
     const p = getRightPanel(); if (!p) return;
     p.innerHTML = `
       <h3 style="margin:0 0 8px 0;">นักลงทุน • ภาพรวมย่าน</h3>
       <div style="display:flex;gap:8px;margin-bottom:10px;">
         <div style="flex:1;border:1px solid #E6EEEC;border-radius:12px;padding:10px;">
-          <small style="color:#6A7D80;">Yield (ย่าน)</small><div style="font-weight:700;font-size:20px;color:#0E3F38">${a.kpi.yield}%</div>
+          <small style="color:#6A7D80;">Yield (ย่าน)</small>
+          <div style="font-weight:700;font-size:20px;color:#0E3F38">${a.kpi.yield}%</div>
         </div>
         <div style="flex:1;border:1px solid #E6EEEC;border-radius:12px;padding:10px;">
-          <small style="color:#6A7D80;">Cap Rate (ย่าน)</small><div style="font-weight:700;font-size:20px;color:#0E3F38">${a.kpi.cap}%</div>
+          <small style="color:#6A7D80;">Cap Rate (ย่าน)</small>
+          <div style="font-weight:700;font-size:20px;color:#0E3F38">${a.kpi.cap}%</div>
         </div>
       </div>
       <h4 style="margin:10px 0 6px 0;">วิธีอ่าน Heat Map</h4>
       <ul style="margin:0 0 10px 18px;padding:0;line-height:1.6;">
         <li>สีเข้ม = ความหนาแน่นกิจกรรมตลาดสูง (ธุรกรรม/ความสนใจ/สต็อกหมุนเวียน)</li>
         <li>สีอ่อน = ความหนาแน่นต่ำ</li>
-        <li>ซูม/ค้นหาย่านเพื่อดูบริบทพื้นที่เฉพาะ</li>
+        <li>ค้นหาย่านเพื่อซูมไปตำแหน่งนั้น</li>
       </ul>
       <div style="font-size:12px;color:#6A7D80;">แหล่งข้อมูล: internal + OSM (เพื่อสาธิต)</div>
     `;
   }
 
-  /* 5) วาง Heat Map ทับแผนที่เดิม (#map) + ช่องค้นหา */
-  function ensureSearchControl(){
+  /* 5) ช่องค้นหาย่านติดบน #map */
+  function ensureSearchControl(map){
     if (document.getElementById('invSearchCtl')) return;
+    const mapEl = document.getElementById('map');
     const ctl = document.createElement('div');
-    ctl.id = 'invSearchCtl';
-    ctl.style.cssText = 'position:absolute;z-index:800;background:#fff;border:1px solid #E6EEEC;border-radius:999px;padding:6px;display:flex;gap:6px;align-items:center;box-shadow:0 6px 14px rgba(0,0,0,.08)';
+    ctl.id='invSearchCtl';
+    ctl.style.cssText='position:absolute;z-index:800;top:10px;left:10px;background:#fff;border:1px solid #E6EEEC;border-radius:999px;padding:6px;display:flex;gap:6px;align-items:center;box-shadow:0 6px 14px rgba(0,0,0,.08)';
     ctl.innerHTML = `
       <input id="invAreaInput" placeholder="ค้นหาย่าน เช่น Sukhumvit" style="border:0;outline:none;padding:6px 8px;width:220px;border-radius:999px;font-weight:700;color:#0E3F38"/>
       <button id="invApplyArea" style="background:#1F6F63;color:#fff;border:0;border-radius:999px;padding:6px 10px;font-weight:700;cursor:pointer;">เลือก</button>
     `;
-    // ติดบนมุมซ้ายบนของ #map container
-    const mapEl = document.getElementById('map');
-    mapEl.style.position = 'relative';
-    ctl.style.top = '10px'; ctl.style.left = '10px';
+    mapEl.style.position='relative';
     mapEl.appendChild(ctl);
 
     document.getElementById('invApplyArea').addEventListener('click', ()=>{
-      const v = (document.getElementById('invAreaInput').value||'Sukhumvit').toLowerCase();
+      const v=(document.getElementById('invAreaInput').value||'Sukhumvit').toLowerCase();
       const key = v.startsWith('suk')?'sukhumvit':v.startsWith('ekk')?'ekkamai':v.startsWith('tho')?'thonglor':
                   v.startsWith('phr')?'phromphong':v.startsWith('on')?'onnut':v.startsWith('rat')?'ratchada':'sukhumvit';
-      setArea(key);
+      setArea(key, map);
     });
   }
 
-  function setArea(key){
+  /* 6) ตั้งย่าน + อัปเดต heat + KPI */
+  function setArea(key, map){
     invActive = key;
-    const a = INV[key];
-    if (baseMap) baseMap.setView(a.center, 13);
-    if (invHeat) invHeat.setLatLngs(a.heat);
+    const a = INV[key] || INV.sukhumvit;
+    map.setView(a.center, 13);
+    heatLayer && heatLayer.setLatLngs(a.heat);
     renderRightPanel();
   }
 
+  /* 7) แทนที่แผนที่เดิมด้วย Heat Map (แก้เคสดับเบิล init) */
   function initInvestorOverlay(){
     const mapEl = document.getElementById('map');
     if (!mapEl) return;
 
-    // ใช้ Leaflet instance เดิมถ้ามี
-    baseMap = mapEl._leaflet_id ? mapEl._leaflet_map : null;
-    if (!baseMap && window.L) {
-      baseMap = L.map(mapEl, { zoomControl: true });
-      mapEl._leaflet_map = baseMap; // เก็บ reference
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(baseMap);
+    // รีเซ็ต container ถ้าเคยถูก Leaflet init แล้ว
+    if (mapEl._leaflet_id || mapEl._leaflet) {
+      const parent = mapEl.parentNode;
+      const fresh = mapEl.cloneNode(false);
+      fresh.id = 'map';
+      parent.replaceChild(fresh, mapEl);
     }
 
-    if (!window.L || !L.heatLayer) {
-      // รอ script โหลด
-      return setTimeout(initInvestorOverlay, 100);
-    }
+    const el = document.getElementById('map');
+    if (!window.L) return setTimeout(initInvestorOverlay, 60);
+    if (!window.L.heatLayer) return setTimeout(initInvestorOverlay, 60);
 
-    // set view และวาง heat
-    baseMap.setView(INV[invActive].center, 13);
-    if (invHeat) { baseMap.removeLayer(invHeat); invHeat=null; }
-    invHeat = L.heatLayer(INV[invActive].heat, { radius: 22, blur: 16, maxZoom: 17 }).addTo(baseMap);
+    const map = L.map(el, { zoomControl:true });
+    el._leaflet_map = map;
 
-    ensureSearchControl();
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+
+    const a = INV[invActive] || INV.sukhumvit;
+    map.setView(a.center, 13);
+
+    if (heatLayer) { try { map.removeLayer(heatLayer); } catch(e){} }
+    heatLayer = L.heatLayer(a.heat, { radius:22, blur:16, maxZoom:17 }).addTo(map);
+
+    ensureSearchControl(map);
     renderRightPanel();
   }
 
-  /* 6) Hook เข้ากับ applyLens เดิม */
+  /* 8) Hook กับ applyLens เดิม และปุ่ม “นักลงทุน” */
   const prevApplyLens = window.applyLens;
   window.applyLens = function(lens){
     if (typeof prevApplyLens === 'function') { try { prevApplyLens(lens); } catch(e){} }
@@ -663,23 +441,21 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
   };
 
-  /* 7) Bind ปุ่ม “นักลงทุน” ให้เปิดโหมด overlay */
   document.addEventListener('DOMContentLoaded', ()=>{
-    // ปุ่มที่เขียนว่า "นักลงทุน"
-    const btn = [...document.querySelectorAll('a,button,[role="button"],.chip,.tab')]
+    // ปุ่ม/ชิปที่มีคำว่า “นักลงทุน”
+    const btn = [...document.querySelectorAll('a,button,[role="button"],.chip,.tab,.btn')]
       .find(el => /นักลงทุน/.test((el.textContent||'').trim()));
     btn?.addEventListener('click', (e)=>{ e.preventDefault(); window.applyLens('investor'); }, {capture:true});
 
-    // เปิดอัตโนมัติถ้า URL ระบุ
+    // เปิดอัตโนมัติถ้ามี ?lens=investor
     const p = new URLSearchParams(location.search);
     if (p.get('lens') === 'investor') window.applyLens('investor');
 
-    // ต่อเนื่องจาก session เดิม
+    // คงสถานะเดิมถ้า reload
     try { if (localStorage.getItem('pd_lens') === 'investor') window.applyLens('investor'); } catch(e){}
   });
 })();
 </script>
-<!-- ===== /Investor Lens (Overlay Mode) ===== -->
-  
+<!-- ===== /Investor Overlay ===== -->
 </body>
 </html>
