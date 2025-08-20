@@ -310,6 +310,300 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+  <!-- ===== Investor Lens (Swipe) – DROP-IN PACK ===== -->
+<script>
+(() => {
+/* ---------- 0) Dynamic loader: Leaflet + Heat + Chart.js (ถ้ายังไม่มี) ---------- */
+function loadScriptOnce(src, test, cb){
+  if (test()) return cb && cb();
+  const s=document.createElement('script'); s.src=src; s.defer=true; s.onload=cb||(()=>{});
+  document.head.appendChild(s);
+}
+function loadCssOnce(href){
+  if ([...document.styleSheets].some(ss => ss.href && ss.href.includes(href))) return;
+  const l=document.createElement('link'); l.rel='stylesheet'; l.href=href;
+  document.head.appendChild(l);
+}
+loadCssOnce('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
+loadScriptOnce('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', ()=>!!window.L, ()=>{});
+loadScriptOnce('https://unpkg.com/leaflet.heat/dist/leaflet-heat.js', ()=>!!(window.L && L.heatLayer), ()=>{});
+loadScriptOnce('https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js', ()=>!!window.Chart, ()=>{});
+
+/* ---------- 1) Inject CSS ---------- */
+const css = `
+:root{
+  --teal:#1F6F63; --teal-700:#0E3F38; --teal-100:#E9F6F0;
+  --ink:#172A2A; --muted:#6A7D80; --card:#fff; --bg:#F7FAF9; --border:#E6EEEC;
+  --shadow:0 10px 24px rgba(12,35,31,.12);
+}
+.inv-hidden{display:none !important}
+#investorSwipe.inv-swipe{
+  position:relative;background:#fff;border:1px solid var(--border);
+  border-radius:16px;box-shadow:var(--shadow);padding:12px;overflow:hidden;margin-top:12px
+}
+#investorSwipe .inv-slide{
+  display:grid;grid-template-columns:2fr 1fr;gap:12px;min-height:420px
+}
+#investorSwipe .inv-left{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px}
+#investorSwipe .inv-right{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px}
+#investorSwipe .inv-grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:900px){#investorSwipe .inv-slide{grid-template-columns:1fr} #investorSwipe .inv-right{order:2}}
+#investorSwipe .inv-kpis{display:flex;gap:10px;margin-bottom:8px}
+#investorSwipe .kpi{flex:1;background:#fff;border:1px solid var(--border);border-radius:12px;padding:10px}
+#investorSwipe .kpi small{color:var(--muted)} #investorSwipe .kpi b{font-size:22px;color:var(--teal-700)}
+#investorSwipe .inv-mapbox{display:flex;flex-direction:column;gap:10px}
+#investorSwipe .inv-search{display:flex;gap:8px}
+#investorSwipe .inv-search input{flex:1;padding:10px 12px;border-radius:999px;border:2px solid var(--teal);font-weight:700}
+#investorSwipe .inv-search button{padding:10px 14px;border-radius:999px;background:var(--teal);border:0;color:#fff;font-weight:700;cursor:pointer}
+#investorSwipe .inv-map{height:280px;border-radius:12px;overflow:hidden}
+#investorSwipe .hint{color:var(--muted);font-size:13px;margin:2px 0 8px}
+#investorSwipe .inv-facts{margin:8px 0 0 16px;padding:0} #investorSwipe .inv-facts li{margin:6px 0}
+
+/* Pager แบบ iPhone (จุด/แท่งเล็กๆ) */
+#investorSwipe .inv-pager{display:flex;justify-content:center;gap:8px;margin-top:10px}
+#investorSwipe .inv-pager .dot{width:24px;height:6px;border-radius:999px;border:0;background:#E0E7E4;cursor:pointer}
+#investorSwipe .inv-pager .dot[aria-selected="true"]{background:var(--teal)}
+`;
+const style = document.createElement('style'); style.textContent = css; document.head.appendChild(style);
+
+/* ---------- 2) Inject HTML Section (หลัง #map ถ้ามี; ไม่งั้นต่อท้าย body) ---------- */
+const html = `
+<section id="investorSwipe" class="inv-swipe inv-hidden" aria-live="polite">
+  <!-- Slide 1: Heatmap + Search + Key metrics -->
+  <article class="inv-slide" data-slide="1">
+    <div class="inv-left">
+      <div class="inv-kpis">
+        <div class="kpi"><small>Yield (ย่าน)</small><b id="invYield">—</b></div>
+        <div class="kpi"><small>Cap Rate (ย่าน)</small><b id="invCap">—</b></div>
+      </div>
+      <div class="inv-mapbox">
+        <div class="inv-search">
+          <input id="invAreaInput" list="invAreaList" placeholder="ค้นหาย่าน เช่น Sukhumvit, Thonglor…" />
+          <button id="invApplyArea">เลือก</button>
+          <datalist id="invAreaList">
+            <option value="Sukhumvit"><option value="Ekkamai"><option value="Thonglor">
+            <option value="Phrom Phong"><option value="On Nut"><option value="Ratchada">
+          </datalist>
+        </div>
+        <div id="invMiniMap" class="inv-map" aria-label="Heat Map"></div>
+      </div>
+    </div>
+    <aside class="inv-right">
+      <h3>วิธีอ่าน Heat Map</h3>
+      <ul class="inv-facts">
+        <li>สีเข้ม = ความหนาแน่นกิจกรรมตลาดสูง</li>
+        <li>สีอ่อน = ความหนาแน่นต่ำ</li>
+        <li>ค้นหาย่านเพื่อให้แผนที่ซูมไปตำแหน่งนั้น</li>
+      </ul>
+    </aside>
+  </article>
+
+  <!-- Slide 2: Demand & Liquidity -->
+  <article class="inv-slide" data-slide="2" style="display:none">
+    <div class="inv-left">
+      <div class="inv-grid2">
+        <div><div class="hint">Take-up Rate (10Y)</div><canvas id="invTakeup"></canvas></div>
+        <div><div class="hint">Absorption Units</div><canvas id="invAbsorb"></canvas></div>
+      </div>
+    </div>
+    <aside class="inv-right">
+      <h3>คำอธิบาย</h3>
+      <ul class="inv-facts">
+        <li><b>Take-up Rate</b> อัตราการขายเมื่อเปิดตัว → ยิ่งสูงยิ่งสะท้อนดีมานด์แข็งแรง</li>
+        <li><b>Absorption</b> ยูนิตที่ขายออกจริงในช่วงเวลา → ดูสมดุลดีมานด์/ซัพพลาย</li>
+        <li><b>Overhang</b> ยูนิตเหลือขายสะสม → สูงมากอาจบ่งชี้ภาวะล้นตลาด</li>
+      </ul>
+    </aside>
+  </article>
+
+  <!-- Slide 3: Supply & Rental -->
+  <article class="inv-slide" data-slide="3" style="display:none">
+    <div class="inv-left">
+      <div class="inv-grid2">
+        <div><div class="hint">New Projects</div><canvas id="invNewProj"></canvas></div>
+        <div><div class="hint">Yield vs Cap Rate</div><canvas id="invRental"></canvas></div>
+      </div>
+    </div>
+    <aside class="inv-right">
+      <h3>เกร็ดสั้น</h3>
+      <ul class="inv-facts">
+        <li><b>New Projects</b> สะท้อนความมั่นใจของผู้พัฒนา</li>
+        <li><b>Yield</b> ผลตอบแทนค่าเช่า (ยิ่งสูงยิ่งดี แต่ต้องเหมาะกับทำเล)</li>
+        <li><b>Cap Rate</b> ผลตอบแทนสุทธิหลังค่าใช้จ่าย</li>
+      </ul>
+    </aside>
+  </article>
+
+  <!-- Slide 4: Price & Treasury Benchmark -->
+  <article class="inv-slide" data-slide="4" style="display:none">
+    <div class="inv-left">
+      <div class="hint">Launch vs Resale vs Treasury (10Y)</div>
+      <canvas id="invPrice3"></canvas>
+    </div>
+    <aside class="inv-right">
+      <h3>การแปลความ</h3>
+      <ul class="inv-facts">
+        <li><b>Launch</b> = ราคาตั้งขายโครงการใหม่</li>
+        <li><b>Resale</b> = ราคาตลาดมือสอง สะท้อนดีมานด์จริง</li>
+        <li><b>Treasury</b> = ราคาประเมินราชการ ใช้เป็น baseline</li>
+        <li>Resale &gt; Launch มาก → ตลาดแข็งแรง, ถ้า Resale &lt; Launch → อาจตั้งราคาสูงเกินจริง</li>
+      </ul>
+    </aside>
+  </article>
+
+  <!-- Pager -->
+  <div class="inv-pager" role="tablist" aria-label="Pages">
+    <button class="dot" data-go="1" aria-selected="true"></button>
+    <button class="dot" data-go="2"></button>
+    <button class="dot" data-go="3"></button>
+    <button class="dot" data-go="4"></button>
+  </div>
+</section>
+`;
+const anchor = document.querySelector('#map') || document.body;
+anchor.insertAdjacentHTML('afterend', html);
+
+/* ---------- 3) Demo dataset (ย่าน) – ใช้แทนด้วย investor.json ได้ภายหลัง ---------- */
+const INV = {
+  sukhumvit:{ center:[13.7336,100.5760],
+    heat:[[13.732,100.572,0.9],[13.735,100.581,0.8],[13.728,100.583,0.7],[13.739,100.575,0.65]],
+    kpi:{yield:5.6,cap:4.2},
+    rental:{ years:[2019,2020,2021,2022,2023,2024], y:[4.3,4.1,4.6,4.9,5.2,5.6], c:[3.8,3.6,3.7,3.9,4.0,4.2] },
+    takeup:{ years:Array.from({length:10},(_,i)=>2015+i), rate:[64,62,65,66,69,71,68,72,74,76] },
+    absorb:[320,380,420,450,520,610,680,720,650,600],
+    supply:{ years:Array.from({length:10},(_,i)=>2015+i), newProj:[5,8,6,10,13,7,4,6,9,11] },
+    price:{ years:Array.from({length:10},(_,i)=>2015+i), launch:[110,112,114,117,120,124,126,129,134,139],
+            resale:[95,98,102,107,112,118,125,131,138,145], treasury:[80,82,84,86,88,92,95,98,101,104] }
+  }
+};
+['ekkamai','thonglor','phromphong','onnut','ratchada'].forEach(k=>{
+  INV[k]=JSON.parse(JSON.stringify(INV.sukhumvit));
+  INV[k].kpi={yield:+(5.1+Math.random()*0.8).toFixed(1), cap:+(3.7+Math.random()*0.6).toFixed(1)};
+});
+
+/* ---------- 4) Logic: map+charts+swipe ---------- */
+let invActive='sukhumvit', invMiniMap, invHeat, invCharts={}, invSlide=1;
+
+function invInitMap(){
+  if (!window.L) return setTimeout(invInitMap, 50); // รอโหลด Leaflet
+  const el = document.getElementById('invMiniMap'); if (!el) return;
+  invMiniMap = L.map(el,{zoomControl:false,attributionControl:false,scrollWheelZoom:false});
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(invMiniMap);
+  invMiniMap.setView(INV[invActive].center, 13);
+  invHeat = L.heatLayer(INV[invActive].heat,{radius:22,blur:16,maxZoom:17}).addTo(invMiniMap);
+}
+function invSetArea(key){
+  invActive = key;
+  const a = INV[key];
+  // KPIs
+  const yEl=document.getElementById('invYield'), cEl=document.getElementById('invCap');
+  if (yEl) yEl.textContent = a.kpi.yield + '%';
+  if (cEl) cEl.textContent = a.kpi.cap + '%';
+  // Map
+  if (invMiniMap){ invMiniMap.setView(a.center,13); invHeat.setLatLngs(a.heat); }
+  invRenderSlide(invSlide);
+}
+// Chart helper
+function invMk(id, cfg){
+  if (!window.Chart) return setTimeout(()=>invMk(id,cfg),50); // รอ Chart.js
+  if (invCharts[id]) invCharts[id].destroy();
+  const el = document.getElementById(id); if (!el) return;
+  invCharts[id] = new Chart(el, cfg);
+}
+function invRenderSlide(s){
+  const a = INV[invActive];
+  if (s===2){
+    invMk('invTakeup',{type:'line', data:{labels:a.takeup.years, datasets:[{data:a.takeup.rate,tension:.35}]},
+      options:{plugins:{legend:{display:false}}, scales:{y:{ticks:{callback:v=>v+'%'}}}}});
+    invMk('invAbsorb',{type:'bar', data:{labels:a.takeup.years, datasets:[{data:a.absorb}]},
+      options:{plugins:{legend:{display:false}}}});
+  } else if (s===3){
+    invMk('invNewProj',{type:'bar', data:{labels:a.supply.years, datasets:[{data:a.supply.newProj}]},
+      options:{plugins:{legend:{display:false}}}});
+    invMk('invRental',{type:'bar', data:{labels:a.rental.years, datasets:[
+        {label:'Yield',data:a.rental.y},{label:'Cap',data:a.rental.c}]},
+      options:{plugins:{legend:{position:'bottom'}}, scales:{y:{ticks:{callback:v=>v+'%'}}}}});
+  } else if (s===4){
+    invMk('invPrice3',{type:'line', data:{labels:a.price.years, datasets:[
+        {label:'Launch', data:a.price.launch, tension:.35},
+        {label:'Resale', data:a.price.resale, tension:.35},
+        {label:'Treasury', data:a.price.treasury, tension:.35}]},
+      options:{plugins:{legend:{position:'bottom'}}}});
+  }
+}
+// Slide show + pager + swipe
+function invShowSlide(n){
+  invSlide = Math.max(1, Math.min(4, n));
+  document.querySelectorAll('#investorSwipe .inv-slide').forEach(sl=>{
+    sl.style.display = (Number(sl.dataset.slide)===invSlide)?'grid':'none';
+  });
+  document.querySelectorAll('#investorSwipe .dot').forEach(d=>{
+    d.setAttribute('aria-selected', d.dataset.go==invSlide ? 'true' : 'false');
+  });
+  invRenderSlide(invSlide);
+}
+function invBindPagerAndSwipe(){
+  document.querySelectorAll('#investorSwipe .dot').forEach(d=>{
+    d.addEventListener('click', ()=> invShowSlide(Number(d.dataset.go)));
+  });
+  const container = document.getElementById('investorSwipe');
+  let sx=0, sy=0, dx=0, dy=0, dragging=false;
+  container.addEventListener('pointerdown', e=>{ dragging=true; sx=e.clientX; sy=e.clientY; container.setPointerCapture(e.pointerId); });
+  container.addEventListener('pointermove', e=>{
+    if(!dragging) return; dx=e.clientX-sx; dy=e.clientY-sy;
+  });
+  container.addEventListener('pointerup', ()=>{
+    if(!dragging) return; dragging=false;
+    if(Math.abs(dx)>80 && Math.abs(dx)>Math.abs(dy)){
+      invShowSlide(invSlide + (dx>0?-1:1));
+    }
+    dx=dy=0;
+  });
+}
+
+/* ---------- 5) Public API: init/destroy investor lens ---------- */
+function initInvestorLens(){
+  // ซ่อนแผนที่หลักเดิม (ถ้ามี)
+  const mainMap = document.getElementById('map'); if (mainMap) mainMap.style.display='none';
+  document.getElementById('investorSwipe')?.classList.remove('inv-hidden');
+
+  // init components
+  if (!invMiniMap) invInitMap();
+  invSetArea(invActive);
+  invBindPagerAndSwipe();
+  invShowSlide(1);
+
+  // bind search (ผูกครั้งเดียว)
+  const applyBtn = document.getElementById('invApplyArea');
+  if (applyBtn && !applyBtn._bound) {
+    applyBtn._bound = true;
+    applyBtn.addEventListener('click', ()=>{
+      const v=(document.getElementById('invAreaInput').value||'Sukhumvit').toLowerCase();
+      const key = v.startsWith('suk')?'sukhumvit':v.startsWith('ekk')?'ekkamai':v.startsWith('tho')?'thonglor':
+                  v.startsWith('phr')?'phromphong':v.startsWith('on')?'onnut':v.startsWith('rat')?'ratchada':'sukhumvit';
+      invSetArea(key);
+    });
+  }
+}
+function destroyInvestorLens(){
+  const mainMap = document.getElementById('map'); if (mainMap) mainMap.style.display='';
+  document.getElementById('investorSwipe')?.classList.add('inv-hidden');
+}
+
+/* ---------- 6) Hook เข้ากับ applyLens เดิม (ถ้ามี) ---------- */
+const prevApplyLens = window.applyLens;
+window.applyLens = function(lens){
+  if (typeof prevApplyLens === 'function') { try { prevApplyLens(lens); } catch(e){} }
+  if (lens === 'investor') initInvestorLens(); else destroyInvestorLens();
+};
+
+/* ---------- 7) ถ้าเปิดหน้าแล้วเลนส์กำลังเป็น investor อยู่ ให้ sync ---------- */
+try {
+  const current = localStorage.getItem('pd_lens');
+  if (current === 'investor') initInvestorLens();
+} catch(e){}
+})();</script>
+<!-- ===== /Investor Lens (Swipe) – DROP-IN PACK ===== -->
 </script>
 </body>
 </html>
